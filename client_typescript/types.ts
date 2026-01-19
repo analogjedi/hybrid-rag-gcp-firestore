@@ -62,7 +62,7 @@ export interface ContentEmbedding {
   /** ISO timestamp when embedding was generated */
   embeddedAt: string;
 
-  /** Model used to generate the embedding (e.g., "gemini-embedding-001") */
+  /** Model used to generate the embedding (e.g., "text-embedding-005") */
   modelVersion: string;
 }
 

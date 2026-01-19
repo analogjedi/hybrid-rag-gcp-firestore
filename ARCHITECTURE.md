@@ -19,7 +19,7 @@ Documents that need semantic search should include a `content` field (or similar
 └── contentEmbedding: {
     ├── vector: Vector([0.123, -0.456, ...])  ← 768 floats
     ├── embeddedAt: "2026-01-03T14:30:05Z"
-    └── modelVersion: "gemini-embedding-001"
+    └── modelVersion: "text-embedding-005"
     }
 ```
 
@@ -29,7 +29,7 @@ Documents that need semantic search should include a `content` field (or similar
 interface ContentEmbedding {
   vector: number[];        // 768-dimensional embedding (Firestore Vector type)
   embeddedAt: string;      // ISO timestamp (e.g., "2026-01-04T00:00:00.560010Z")
-  modelVersion: string;    // "gemini-embedding-001"
+  modelVersion: string;    // "text-embedding-005"
 }
 ```
 
@@ -88,8 +88,8 @@ Use trigger-based for automatic consistency. Use on-demand for:
 
 | Property | Value |
 |----------|-------|
-| **Model** | `gemini-embedding-001` |
-| **Provider** | Google Gemini API |
+| **Model** | `text-embedding-005` |
+| **Provider** | Vertex AI |
 | **Output Dimensions** | 768 (configurable up to 3072) |
 | **Firestore Max** | 2048 dimensions |
 | **Task Type** | General text embedding |
@@ -104,17 +104,15 @@ Use trigger-based for automatic consistency. Use on-demand for:
 ### API Call Example
 
 ```python
-from google import genai
-from google.genai import types
+from vertexai.language_models import TextEmbeddingInput, TextEmbeddingModel
 
-client = genai.Client(api_key=api_key)
-response = client.models.embed_content(
-    model="gemini-embedding-001",
-    contents=text_to_embed,
-    config=types.EmbedContentConfig(output_dimensionality=768),
-)
-embedding_values = response.embeddings[0].values
+model = TextEmbeddingModel.from_pretrained("text-embedding-005")
+inputs = [TextEmbeddingInput(text_to_embed, "RETRIEVAL_DOCUMENT")]
+embeddings = model.get_embeddings(inputs, output_dimensionality=768)
+embedding_values = embeddings[0].values
 ```
+
+Note: Vertex AI uses Application Default Credentials (ADC). No API key is required when running in Cloud Functions or with a service account.
 
 ---
 

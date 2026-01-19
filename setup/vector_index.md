@@ -102,7 +102,7 @@ The index dimension doesn't match your embedding dimension.
 
 **Solution:**
 1. Delete the existing index
-2. Recreate with correct dimension (768 for gemini-embedding-001)
+2. Recreate with correct dimension (768 for text-embedding-005)
 
 ### Error: "Permission denied"
 
