@@ -1,8 +1,0 @@
-# Firebase Functions Python SDK
-firebase-functions>=0.1.0
-
-# Firebase Admin SDK for Firestore access
-firebase-admin>=6.0.0
-
-# Google Gemini AI for embedding generation
-google-genai>=0.1.0
