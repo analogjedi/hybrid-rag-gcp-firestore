@@ -89,10 +89,14 @@ export default function SearchPage() {
     await performSearch(searchQuery, effectiveThreshold, model, thinkingLevel);
   };
 
-  const handleThresholdChange = async (value: number[]) => {
+  const handleThresholdChange = (value: number[]) => {
+    // Only update state during drag - don't trigger search
+    setThreshold(value[0]);
+  };
+
+  const handleThresholdCommit = async (value: number[]) => {
+    // Trigger search when user finishes dragging
     const newThreshold = value[0];
-    setThreshold(newThreshold);
-    // Re-search if we have an active query
     if (lastSearchQuery && !showAll) {
       await performSearch(lastSearchQuery, newThreshold, model, thinkingLevel);
     }
@@ -139,7 +143,8 @@ export default function SearchPage() {
 
         {/* Search Controls */}
         <Card>
-          <CardContent className="py-4">
+          <CardContent className="py-4 space-y-4">
+            {/* Row 1: Model and Thinking */}
             <div className="flex flex-wrap items-center gap-6">
               {/* Model Selection */}
               <div className="flex items-center gap-2">
@@ -171,24 +176,6 @@ export default function SearchPage() {
                 </Select>
               </div>
 
-              {/* Threshold Slider */}
-              <div className="flex items-center gap-3 border-l pl-6">
-                <SlidersHorizontal className="h-4 w-4 text-muted-foreground shrink-0" />
-                <span className="text-sm font-medium shrink-0">Threshold</span>
-                <Slider
-                  value={[threshold]}
-                  onValueChange={handleThresholdChange}
-                  min={0}
-                  max={0.7}
-                  step={0.05}
-                  disabled={showAll}
-                  className="w-[120px]"
-                />
-                <span className="text-sm font-mono w-10">
-                  {showAll ? "Off" : `${(threshold * 100).toFixed(0)}%`}
-                </span>
-              </div>
-
               {/* Show All Toggle */}
               <div className="flex items-center gap-2 border-l pl-6">
                 <Switch
@@ -200,6 +187,27 @@ export default function SearchPage() {
                   Show All
                 </Label>
               </div>
+            </div>
+
+            {/* Row 2: Threshold Slider - separate row for better interaction */}
+            <div className="flex items-center gap-4 pt-2 border-t">
+              <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Similarity Threshold</span>
+              <span className="text-xs text-muted-foreground">0%</span>
+              <Slider
+                value={[threshold]}
+                onValueChange={handleThresholdChange}
+                onValueCommit={handleThresholdCommit}
+                min={0}
+                max={0.7}
+                step={0.05}
+                disabled={showAll}
+                className="flex-1 max-w-xs"
+              />
+              <span className="text-xs text-muted-foreground">70%</span>
+              <span className="text-sm font-mono font-bold w-12 text-right">
+                {showAll ? "Off" : `${(threshold * 100).toFixed(0)}%`}
+              </span>
             </div>
           </CardContent>
         </Card>

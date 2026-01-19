@@ -54,7 +54,7 @@ export interface DocumentContent {
  */
 export interface ContentEmbedding {
   /**
-   * 768-dimensional embedding vector.
+   * 2048-dimensional embedding vector.
    * Stored as Firestore Vector type, appears as number[] in JS.
    */
   vector: number[];
@@ -62,7 +62,7 @@ export interface ContentEmbedding {
   /** ISO timestamp when embedding was generated */
   embeddedAt: string;
 
-  /** Model used to generate the embedding (e.g., "text-embedding-005") */
+  /** Model used to generate the embedding (e.g., "gemini-embedding-001") */
   modelVersion: string;
 }
 
@@ -120,13 +120,13 @@ export interface SearchRequest {
   limit?: number;
 
   /**
-   * Cosine distance threshold for filtering results.
+   * Similarity threshold for filtering results.
    * Range: 0.0 to 1.0
-   * - 0.0 = Only exact matches
+   * - 0.0 = Include all results
    * - 0.5 = Default, moderate matching (recommended)
-   * - 1.0 = Include all results up to limit
+   * - 1.0 = Only exact matches
    *
-   * Lower values = stricter matching, fewer results.
+   * Higher values = stricter matching, fewer results.
    */
   threshold?: number;
 }
@@ -139,10 +139,10 @@ export interface SearchResult {
   documentId: string;
 
   /**
-   * Cosine distance from query embedding.
-   * Range: 0.0 (identical) to ~2.0 (completely different)
+   * DOT_PRODUCT similarity score from query embedding.
+   * Range: -1.0 to 1.0 (higher = more similar)
    */
-  distance: number;
+  similarity: number;
 
   /**
    * Human-readable relevance score.

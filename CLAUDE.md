@@ -31,10 +31,13 @@ The project has four main components:
 ## Key Technical Details
 
 - **Embedding Model**: `gemini-embedding-001` via Vertex AI (2048 dimensions)
-- **Gemini Model**: `gemini-2.0-flash-001` via Vertex AI (document analysis, query classification)
+- **Classification Model**: `gemini-3-pro-preview` or `gemini-3-flash-preview` via `google-genai` SDK
+- **Document Analysis**: `gemini-2.0-flash-001` via Vertex AI
 - **Distance Measure**: DOT_PRODUCT (higher = more similar, normalized vectors)
 - **Search Task Type**: `RETRIEVAL_QUERY` for queries, `RETRIEVAL_DOCUMENT` for corpus
-- **Authentication**: Vertex AI with Application Default Credentials (no API keys needed)
+- **Authentication**:
+  - Embeddings: Vertex AI with Application Default Credentials (ADC)
+  - Gemini 3 Classification: API key via Firebase Secrets (`GEMINI_API_KEY`)
 
 ## Build & Development Commands
 
@@ -96,7 +99,62 @@ Copy `admin_site/.env.local.example` to `admin_site/.env.local` and configure:
 | `VERTEX_AI_LOCATION` | Vertex AI region (e.g., "us-central1") |
 
 ### Cloud Functions (deployed)
-No API keys or secrets required. Cloud Functions authenticate via Application Default Credentials (ADC) which automatically use the function's service account within GCP.
+
+**Embeddings & Document Processing:** Use Application Default Credentials (ADC) - no API keys needed.
+
+**Gemini 3 Classification (google-genai SDK):** Requires API key stored in Firebase Secrets.
+
+#### Setting up Gemini 3 API Key
+
+1. **Generate API Key** in [Google AI Studio](https://aistudio.google.com/apikey) or Vertex AI Studio
+2. **Store as Firebase Secret:**
+   ```bash
+   firebase functions:secrets:set GEMINI_API_KEY --project YOUR_PROJECT_ID
+   # Paste your API key when prompted
+   ```
+3. **Verify secret access:**
+   ```bash
+   firebase functions:secrets:access GEMINI_API_KEY --project YOUR_PROJECT_ID
+   ```
+
+The Cloud Function declares the secret dependency:
+```python
+@https_fn.on_call(
+    secrets=["GEMINI_API_KEY"],
+)
+def classify_and_search(req):
+    api_key = os.environ.get("GEMINI_API_KEY")
+    client = genai.Client(vertexai=True, api_key=api_key)
+```
+
+#### Python Dependencies for Gemini 3
+
+The `google-genai` SDK is required for Gemini 3 models:
+```
+# requirements.txt
+google-genai>=1.0.0
+```
+
+Usage:
+```python
+from google import genai
+from google.genai import types
+
+client = genai.Client(vertexai=True, api_key=os.environ.get("GEMINI_API_KEY"))
+
+config = types.GenerateContentConfig(
+    temperature=0.1,
+    max_output_tokens=8192,
+    response_mime_type="application/json",
+    thinking_config=types.ThinkingConfig(thinking_level="HIGH"),  # or "LOW"
+)
+
+response = client.models.generate_content(
+    model="gemini-3-pro-preview",  # or "gemini-3-flash-preview"
+    contents=[types.Content(role="user", parts=[types.Part(text=prompt)])],
+    config=config,
+)
+```
 
 ## Python Utilities
 
