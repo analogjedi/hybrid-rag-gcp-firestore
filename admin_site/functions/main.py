@@ -355,17 +355,12 @@ def generate_document_embedding(req: https_fn.CallableRequest) -> dict[str, Any]
         # Update status
         doc_ref.update({"status": "embedding"})
 
-        # Get content
+        # Get content and build embedding text from all fields
         content = doc_data.get("content", {})
-        summary = content.get("summary", "")
-        keywords = content.get("keywords", [])
+        embedding_text = build_embedding_text(content)
 
-        if not summary and not keywords:
-            raise ValueError("Document has no summary or keywords for embedding")
-
-        # Build embedding text
-        keywords_str = ", ".join(keywords) if keywords else ""
-        embedding_text = f"{summary}\n\nKeywords: {keywords_str}".strip()
+        if not embedding_text:
+            raise ValueError("Document has no content for embedding")
 
         # Generate embedding
         vector = generate_embedding(embedding_text)
@@ -442,14 +437,10 @@ def generate_embeddings_for_ready_docs(req: https_fn.CallableRequest) -> dict[st
             doc_ref.update({"status": "embedding"})
 
             content = doc_data.get("content", {})
-            summary = content.get("summary", "")
-            keywords = content.get("keywords", [])
+            embedding_text = build_embedding_text(content)
 
-            if not summary and not keywords:
-                raise ValueError("No summary or keywords")
-
-            keywords_str = ", ".join(keywords) if keywords else ""
-            embedding_text = f"{summary}\n\nKeywords: {keywords_str}".strip()
+            if not embedding_text:
+                raise ValueError("No content for embedding")
 
             vector = generate_embedding(embedding_text)
 
@@ -474,6 +465,54 @@ def generate_embeddings_for_ready_docs(req: https_fn.CallableRequest) -> dict[st
             details.append({"documentId": doc_id, "success": False, "error": str(e)})
 
     return {"processed": processed, "errors": errors, "details": details}
+
+
+def build_embedding_text(content: dict[str, Any]) -> str:
+    """
+    Build embedding text from all content fields except contentUpdatedAt.
+
+    Handles different field types:
+    - Strings: included as-is
+    - Arrays: joined with commas
+    - Other types: converted to string
+
+    Returns formatted text suitable for embedding generation.
+    """
+    if not content:
+        return ""
+
+    # Fields to exclude from embedding
+    excluded_fields = {"contentUpdatedAt"}
+
+    # Build text parts
+    parts = []
+
+    # Process summary first if it exists (most important for context)
+    if "summary" in content and content["summary"]:
+        parts.append(content["summary"])
+
+    # Process all other fields
+    for key, value in content.items():
+        if key in excluded_fields or key == "summary":
+            continue
+        if value is None:
+            continue
+
+        # Format the field name for display
+        field_name = key.replace("_", " ").title()
+
+        if isinstance(value, list):
+            if value:  # Only include non-empty lists
+                value_str = ", ".join(str(v) for v in value)
+                parts.append(f"{field_name}: {value_str}")
+        elif isinstance(value, str):
+            if value.strip():  # Only include non-empty strings
+                parts.append(f"{field_name}: {value}")
+        else:
+            # Convert other types to string
+            parts.append(f"{field_name}: {value}")
+
+    return "\n".join(parts)
 
 
 def generate_embedding(text: str) -> list[float]:
@@ -789,15 +828,10 @@ def backfill_embeddings(req: https_fn.CallableRequest) -> dict[str, Any]:
         try:
             doc_data = doc.to_dict()
             content = doc_data.get("content", {})
-            summary = content.get("summary", "")
-            keywords = content.get("keywords", [])
+            embedding_text = build_embedding_text(content)
 
-            if not summary and not keywords:
+            if not embedding_text:
                 continue
-
-            # Build embedding text
-            keywords_str = ", ".join(keywords) if keywords else ""
-            embedding_text = f"{summary}\n\nKeywords: {keywords_str}".strip()
 
             # Generate embedding
             vector = generate_embedding(embedding_text)
