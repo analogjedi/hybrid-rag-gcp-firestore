@@ -34,8 +34,8 @@ DATABASE_ID = os.environ.get("FIRESTORE_DATABASE_ID", "test")
 
 # Models
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash-001")
-EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "text-embedding-005")
-EMBEDDING_DIMENSIONS = 768
+EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "gemini-embedding-001")
+EMBEDDING_DIMENSIONS = 2048  # Firestore max; gemini-embedding-001 supports up to 3072
 
 
 def get_db():
@@ -515,11 +515,19 @@ def build_embedding_text(content: dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
-def generate_embedding(text: str) -> list[float]:
-    """Generate an embedding vector for the given text."""
+def generate_embedding(text: str, task_type: str = "RETRIEVAL_DOCUMENT") -> list[float]:
+    """
+    Generate an embedding vector for the given text.
+
+    Args:
+        text: The text to embed
+        task_type: The embedding task type. Use:
+            - "RETRIEVAL_DOCUMENT" for documents (corpus)
+            - "RETRIEVAL_QUERY" for search queries
+    """
     model = TextEmbeddingModel.from_pretrained(EMBEDDING_MODEL)
 
-    inputs = [TextEmbeddingInput(text, "RETRIEVAL_DOCUMENT")]
+    inputs = [TextEmbeddingInput(text, task_type)]
     embeddings = model.get_embeddings(inputs, output_dimensionality=EMBEDDING_DIMENSIONS)
 
     return embeddings[0].values
@@ -687,19 +695,19 @@ def search_collection(
     threshold: float,
 ) -> list[dict[str, Any]]:
     """Search a single collection using vector similarity."""
-    # Generate query embedding
-    query_vector = generate_embedding(query)
+    # Generate query embedding with RETRIEVAL_QUERY task type (asymmetric search)
+    query_vector = generate_embedding(query, task_type="RETRIEVAL_QUERY")
 
     # Documents are stored in {collection_id}_documents
     docs_ref = db.collection(f"{collection_id}_documents")
 
-    # Use Firestore vector search with distance_result_field to get distances
+    # Use Firestore vector search with DOT_PRODUCT (most efficient for normalized vectors)
     vector_query = docs_ref.find_nearest(
         vector_field="contentEmbedding.vector",
         query_vector=Vector(query_vector),
-        distance_measure=DistanceMeasure.COSINE,
+        distance_measure=DistanceMeasure.DOT_PRODUCT,
         limit=limit,
-        distance_result_field="vector_distance",  # Store distance in this field
+        distance_result_field="vector_distance",
     )
 
     results = []
@@ -707,15 +715,16 @@ def search_collection(
         doc_data = doc.to_dict()
         content = doc_data.get("content", {})
 
-        # Distance is stored in the field we specified
-        distance = doc_data.get("vector_distance")
+        # DOT_PRODUCT: higher = more similar (range -1 to 1 for normalized vectors)
+        similarity = doc_data.get("vector_distance")
 
         results.append(
             {
                 "documentId": doc.id,
                 "collectionId": collection_id,
-                "rawDistance": distance,
-                "weightedScore": 1 - (distance or 0) if distance is not None else 0.5,
+                "rawSimilarity": similarity,
+                # Normalize DOT_PRODUCT from [-1,1] to [0,1] for consistent scoring
+                "weightedScore": ((similarity or 0) + 1) / 2 if similarity is not None else 0.5,
                 "summary": content.get("summary", ""),
                 "keywords": content.get("keywords", []),
                 "fileName": doc_data.get("fileName", ""),
