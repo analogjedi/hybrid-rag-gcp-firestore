@@ -1,0 +1,99 @@
+collection:
+  id: human_resources_all
+  display_name: "Human Resources"
+  description: "HR policies, benefits guides, org charts, employee handbooks, and training materials."
+  icon: "users"
+
+fields:
+  # === GEMINI-GENERATED FIELDS ===
+  - name: summary
+    type: string
+    source: gemini
+    prompt: |
+      Summarize this HR document in 2-3 sentences. Focus on:
+      - The main topic or policy described
+      - Key points employees should know
+      - Any important dates or deadlines mentioned
+    required: true
+
+  - name: keywords
+    type: array
+    source: gemini
+    prompt: |
+      Extract 5-10 keywords from this HR document.
+      Include: policy names, benefit types, department names, compliance terms.
+      Return as JSON array of strings.
+    item_type: string
+    min_items: 5
+    max_items: 10
+
+  - name: document_category
+    type: string
+    source: gemini
+    prompt: "Classify this HR document. Return one of: Policy, Benefits, Handbook, Training, Org_Chart, Compliance, Forms, Onboarding, Other"
+    enum: [Policy, Benefits, Handbook, Training, Org_Chart, Compliance, Forms, Onboarding, Other]
+
+  - name: department
+    type: string
+    source: gemini
+    prompt: "Which department does this document primarily apply to? Return one of: All_Employees, Engineering, Sales, Marketing, Finance, Operations, HR, Legal, Executive, Other"
+    enum: [All_Employees, Engineering, Sales, Marketing, Finance, Operations, HR, Legal, Executive, Other]
+
+  - name: effective_date
+    type: string
+    source: gemini
+    prompt: "What is the effective date or version date of this document? Return in YYYY-MM-DD format or 'unspecified' if not mentioned."
+
+  # === MANUAL FIELDS ===
+  - name: owner
+    type: string
+    source: manual
+    required: true
+    description: "HR contact responsible for this document"
+
+  - name: confidentiality
+    type: string
+    source: manual
+    enum: [Public, Internal, Confidential, Restricted]
+    default: Internal
+
+  - name: revision
+    type: string
+    source: manual
+    default: "1.0"
+
+embedding:
+  model: text-embedding-005
+  dimensions: 768
+  source_fields:
+    - field: summary
+      weight: 1.0
+    - field: keywords
+      weight: 0.5
+      join: ", "
+  text_template: "{summary}\n\nKeywords: {keywords}"
+
+classifier_hints:
+  keywords:
+    - HR
+    - human resources
+    - policy
+    - benefits
+    - employee
+    - handbook
+    - PTO
+    - vacation
+    - sick leave
+    - onboarding
+    - training
+    - compliance
+    - org chart
+    - organization
+    - payroll
+    - compensation
+  example_queries:
+    - "What is the PTO policy?"
+    - "How do I enroll in health benefits?"
+    - "Who is the VP of Engineering?"
+    - "What is the remote work policy?"
+    - "New employee onboarding checklist"

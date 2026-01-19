@@ -1,0 +1,109 @@
+collection:
+  id: ic_design_engineering
+  display_name: "IC Design Engineering"
+  description: "Circuit designs, SRAM, standard cells, analog IP, layout rules, timing constraints, and design methodology."
+  icon: "circuit-board"
+
+fields:
+  # === GEMINI-GENERATED FIELDS ===
+  - name: summary
+    type: string
+    source: gemini
+    prompt: |
+      Summarize this design engineering document in 2-3 sentences. Focus on:
+      - Main circuit or IP block described
+      - Key specifications or performance metrics
+      - Design methodology if mentioned
+    required: true
+
+  - name: keywords
+    type: array
+    source: gemini
+    prompt: |
+      Extract 5-10 technical keywords from this document.
+      Include: circuit types, design tools, performance metrics, IP names.
+      Return as JSON array of strings.
+    item_type: string
+    min_items: 5
+    max_items: 10
+
+  - name: technology_node
+    type: string
+    source: gemini
+    prompt: "What semiconductor technology node is this design for? (e.g., 3nm, 5nm, 7nm, 14nm, 28nm). Return just the node or 'unspecified'."
+
+  - name: design_domain
+    type: string
+    source: gemini
+    prompt: "Classify the design domain. Return one of: Digital, Analog, Mixed_Signal, Memory, IO, Custom, Standard_Cell, Other"
+    enum: [Digital, Analog, Mixed_Signal, Memory, IO, Custom, Standard_Cell, Other]
+
+  - name: document_type
+    type: string
+    source: gemini
+    prompt: "Classify this document. Return one of: Specification, Layout_Rules, Timing_Constraints, Design_Guide, IP_Datasheet, Methodology, Training, Other"
+    enum: [Specification, Layout_Rules, Timing_Constraints, Design_Guide, IP_Datasheet, Methodology, Training, Other]
+
+  - name: ip_blocks
+    type: array
+    source: gemini
+    prompt: |
+      List any IP blocks or circuit modules mentioned in this document.
+      Return as JSON array of strings. If none mentioned, return empty array.
+    item_type: string
+
+  # === MANUAL FIELDS ===
+  - name: owner
+    type: string
+    source: manual
+    required: true
+    description: "Document owner or author"
+
+  - name: confidentiality
+    type: string
+    source: manual
+    enum: [Public, Internal, Confidential, Restricted]
+    default: Internal
+
+  - name: revision
+    type: string
+    source: manual
+    default: "1.0"
+
+embedding:
+  model: text-embedding-005
+  dimensions: 768
+  source_fields:
+    - field: summary
+      weight: 1.0
+    - field: keywords
+      weight: 0.5
+      join: ", "
+  text_template: "{summary}\n\nKeywords: {keywords}"
+
+classifier_hints:
+  keywords:
+    - circuit design
+    - SRAM
+    - standard cell
+    - analog
+    - digital
+    - mixed signal
+    - timing
+    - layout
+    - DRC
+    - LVS
+    - PPA
+    - power
+    - performance
+    - area
+    - IP block
+    - synthesis
+    - place and route
+    - verification
+  example_queries:
+    - "SRAM bitcell design for 5nm"
+    - "Timing constraints for high-speed IO"
+    - "Layout rules for analog circuits"
+    - "Standard cell library specifications"
+    - "Power optimization techniques"

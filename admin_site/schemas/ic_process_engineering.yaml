@@ -1,0 +1,109 @@
+collection:
+  id: ic_process_engineering
+  display_name: "IC Process Engineering"
+  description: "Semiconductor fabrication process documents including flows, yield analysis, defect reports, and process integration."
+  icon: "cpu"
+
+fields:
+  # === GEMINI-GENERATED FIELDS ===
+  - name: summary
+    type: string
+    source: gemini
+    prompt: |
+      Summarize this process engineering document in 2-3 sentences. Focus on:
+      - Main topic or process described
+      - Key findings or specifications
+      - Technology node if mentioned
+    required: true
+
+  - name: keywords
+    type: array
+    source: gemini
+    prompt: |
+      Extract 5-10 technical keywords from this document.
+      Include: process names, equipment, materials, metrics.
+      Return as JSON array of strings.
+    item_type: string
+    min_items: 5
+    max_items: 10
+
+  - name: technology_node
+    type: string
+    source: gemini
+    prompt: "What semiconductor technology node is discussed? (e.g., 3nm, 5nm, 7nm, 14nm, 28nm). Return just the node or 'unspecified'."
+
+  - name: process_area
+    type: string
+    source: gemini
+    prompt: "Classify the process area. Return one of: FEOL, BEOL, MOL, Full_Flow, Packaging, Test, Other"
+    enum: [FEOL, BEOL, MOL, Full_Flow, Packaging, Test, Other]
+
+  - name: document_type
+    type: string
+    source: gemini
+    prompt: "Classify this document. Return one of: Process_Flow, Yield_Report, Integration_Guide, Equipment_Spec, Failure_Analysis, Training, Other"
+    enum: [Process_Flow, Yield_Report, Integration_Guide, Equipment_Spec, Failure_Analysis, Training, Other]
+
+  - name: equipment_mentioned
+    type: array
+    source: gemini
+    prompt: |
+      List the major equipment or tools mentioned in this document.
+      Return as JSON array of strings. If none mentioned, return empty array.
+    item_type: string
+
+  # === MANUAL FIELDS ===
+  - name: owner
+    type: string
+    source: manual
+    required: true
+    description: "Document owner or author"
+
+  - name: confidentiality
+    type: string
+    source: manual
+    enum: [Public, Internal, Confidential, Restricted]
+    default: Internal
+
+  - name: revision
+    type: string
+    source: manual
+    default: "1.0"
+
+embedding:
+  model: text-embedding-005
+  dimensions: 768
+  source_fields:
+    - field: summary
+      weight: 1.0
+    - field: keywords
+      weight: 0.5
+      join: ", "
+  text_template: "{summary}\n\nKeywords: {keywords}"
+
+classifier_hints:
+  keywords:
+    - process flow
+    - fabrication
+    - etching
+    - deposition
+    - lithography
+    - CMP
+    - implant
+    - anneal
+    - yield
+    - defect
+    - wafer
+    - die
+    - FEOL
+    - BEOL
+    - MOL
+    - FinFET
+    - gate oxide
+    - metal interconnect
+  example_queries:
+    - "What is the etch recipe for 7nm metal gates?"
+    - "Yield improvement techniques for advanced nodes"
+    - "CMP slurry specifications"
+    - "Defect analysis for contact formation"
+    - "Process flow for FinFET transistors"

@@ -1,0 +1,105 @@
+collection:
+  id: products_and_datasheets
+  display_name: "Products & Datasheets"
+  description: "Product specifications, datasheets, application notes, and customer-facing technical documentation."
+  icon: "file-text"
+
+fields:
+  # === GEMINI-GENERATED FIELDS ===
+  - name: summary
+    type: string
+    source: gemini
+    prompt: |
+      Summarize this product document in 2-3 sentences. Focus on:
+      - Product name and type
+      - Key features and specifications
+      - Target applications or markets
+    required: true
+
+  - name: keywords
+    type: array
+    source: gemini
+    prompt: |
+      Extract 5-10 keywords from this product document.
+      Include: product names, part numbers, specifications, applications.
+      Return as JSON array of strings.
+    item_type: string
+    min_items: 5
+    max_items: 10
+
+  - name: product_family
+    type: string
+    source: gemini
+    prompt: "What product family does this document belong to? Return a short name like 'MCU', 'FPGA', 'Power IC', 'Sensor', etc. or 'unspecified'."
+
+  - name: document_type
+    type: string
+    source: gemini
+    prompt: "Classify this document. Return one of: Datasheet, Application_Note, User_Guide, Reference_Design, Selection_Guide, Errata, Other"
+    enum: [Datasheet, Application_Note, User_Guide, Reference_Design, Selection_Guide, Errata, Other]
+
+  - name: target_applications
+    type: array
+    source: gemini
+    prompt: |
+      List the target applications or markets mentioned.
+      Return as JSON array of strings. Examples: ["Automotive", "Industrial", "Consumer"]
+    item_type: string
+
+  - name: part_numbers
+    type: array
+    source: gemini
+    prompt: |
+      Extract all part numbers or product codes mentioned in this document.
+      Return as JSON array of strings. If none found, return empty array.
+    item_type: string
+
+  # === MANUAL FIELDS ===
+  - name: owner
+    type: string
+    source: manual
+    required: true
+    description: "Product manager or technical owner"
+
+  - name: confidentiality
+    type: string
+    source: manual
+    enum: [Public, Internal, Confidential, Restricted]
+    default: Public
+
+  - name: revision
+    type: string
+    source: manual
+    default: "1.0"
+
+embedding:
+  model: text-embedding-005
+  dimensions: 768
+  source_fields:
+    - field: summary
+      weight: 1.0
+    - field: keywords
+      weight: 0.5
+      join: ", "
+  text_template: "{summary}\n\nKeywords: {keywords}"
+
+classifier_hints:
+  keywords:
+    - datasheet
+    - product
+    - specifications
+    - features
+    - application note
+    - part number
+    - ordering information
+    - package
+    - pinout
+    - electrical characteristics
+    - absolute maximum ratings
+    - typical application
+  example_queries:
+    - "What is the maximum operating temperature for XYZ123?"
+    - "Reference design for motor control"
+    - "Application note for sensor interface"
+    - "Selection guide for power management ICs"
+    - "Datasheet for automotive microcontrollers"

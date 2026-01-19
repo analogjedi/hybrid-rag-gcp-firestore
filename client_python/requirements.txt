@@ -1,0 +1,11 @@
+# Core dependencies
+requests>=2.28.0
+
+# Firebase Admin SDK (optional - for service account auth)
+firebase-admin>=6.0.0
+
+# Google Auth (for ID token generation)
+google-auth>=2.0.0
+
+# Streamlit (optional - for StreamlitSearchUI)
+# streamlit>=1.20.0

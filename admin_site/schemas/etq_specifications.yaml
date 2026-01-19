@@ -1,0 +1,110 @@
+collection:
+  id: etq_specifications
+  display_name: "ETQ Specifications"
+  description: "Quality specifications, test procedures, reliability standards, and compliance documentation."
+  icon: "clipboard-check"
+
+fields:
+  # === GEMINI-GENERATED FIELDS ===
+  - name: summary
+    type: string
+    source: gemini
+    prompt: |
+      Summarize this quality/test specification in 2-3 sentences. Focus on:
+      - What is being specified or tested
+      - Key acceptance criteria or limits
+      - Applicable standards or methods
+    required: true
+
+  - name: keywords
+    type: array
+    source: gemini
+    prompt: |
+      Extract 5-10 keywords from this specification document.
+      Include: test methods, standards, parameters, equipment.
+      Return as JSON array of strings.
+    item_type: string
+    min_items: 5
+    max_items: 10
+
+  - name: specification_type
+    type: string
+    source: gemini
+    prompt: "Classify this specification. Return one of: Test_Procedure, Reliability_Spec, Incoming_Inspection, Outgoing_QA, Process_Control, Calibration, Audit, Other"
+    enum: [Test_Procedure, Reliability_Spec, Incoming_Inspection, Outgoing_QA, Process_Control, Calibration, Audit, Other]
+
+  - name: applicable_standards
+    type: array
+    source: gemini
+    prompt: |
+      List any industry standards referenced (e.g., JEDEC, AEC-Q, ISO, MIL-STD).
+      Return as JSON array of strings. If none mentioned, return empty array.
+    item_type: string
+
+  - name: test_category
+    type: string
+    source: gemini
+    prompt: "Classify the test category. Return one of: Electrical, Mechanical, Environmental, Reliability, Failure_Analysis, Visual, Chemical, Other"
+    enum: [Electrical, Mechanical, Environmental, Reliability, Failure_Analysis, Visual, Chemical, Other]
+
+  - name: equipment_required
+    type: array
+    source: gemini
+    prompt: |
+      List major test equipment or tools required.
+      Return as JSON array of strings. If none mentioned, return empty array.
+    item_type: string
+
+  # === MANUAL FIELDS ===
+  - name: owner
+    type: string
+    source: manual
+    required: true
+    description: "Quality engineer responsible for this specification"
+
+  - name: confidentiality
+    type: string
+    source: manual
+    enum: [Public, Internal, Confidential, Restricted]
+    default: Internal
+
+  - name: revision
+    type: string
+    source: manual
+    default: "1.0"
+
+embedding:
+  model: text-embedding-005
+  dimensions: 768
+  source_fields:
+    - field: summary
+      weight: 1.0
+    - field: keywords
+      weight: 0.5
+      join: ", "
+  text_template: "{summary}\n\nKeywords: {keywords}"
+
+classifier_hints:
+  keywords:
+    - specification
+    - test procedure
+    - quality
+    - reliability
+    - JEDEC
+    - AEC-Q
+    - ISO
+    - inspection
+    - acceptance criteria
+    - sampling
+    - measurement
+    - calibration
+    - SPC
+    - control limits
+    - defect
+    - failure analysis
+  example_queries:
+    - "JEDEC reliability test procedures"
+    - "Incoming inspection criteria for wafers"
+    - "AEC-Q100 qualification requirements"
+    - "SPC control limits for process monitoring"
+    - "Failure analysis procedure for bond failures"

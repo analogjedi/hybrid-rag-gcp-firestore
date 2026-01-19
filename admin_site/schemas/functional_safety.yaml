@@ -1,0 +1,114 @@
+collection:
+  id: functional_safety
+  display_name: "Functional Safety"
+  description: "ISO 26262 documentation, safety analysis (FMEA, FTA), ASIL requirements, and safety manuals."
+  icon: "shield-check"
+
+fields:
+  # === GEMINI-GENERATED FIELDS ===
+  - name: summary
+    type: string
+    source: gemini
+    prompt: |
+      Summarize this functional safety document in 2-3 sentences. Focus on:
+      - The safety topic or analysis type
+      - Key safety requirements or findings
+      - Applicable ASIL level if mentioned
+    required: true
+
+  - name: keywords
+    type: array
+    source: gemini
+    prompt: |
+      Extract 5-10 keywords from this safety document.
+      Include: safety terms, analysis types, standards, requirements.
+      Return as JSON array of strings.
+    item_type: string
+    min_items: 5
+    max_items: 10
+
+  - name: safety_standard
+    type: string
+    source: gemini
+    prompt: "Which functional safety standard does this document relate to? Return one of: ISO_26262, IEC_61508, ISO_13849, ISO_25119, Multiple, Other"
+    enum: [ISO_26262, IEC_61508, ISO_13849, ISO_25119, Multiple, Other]
+
+  - name: document_type
+    type: string
+    source: gemini
+    prompt: "Classify this document. Return one of: Safety_Manual, FMEA, FTA, DFA, Safety_Plan, Safety_Case, Verification_Report, Training, Other"
+    enum: [Safety_Manual, FMEA, FTA, DFA, Safety_Plan, Safety_Case, Verification_Report, Training, Other]
+
+  - name: asil_level
+    type: string
+    source: gemini
+    prompt: "What ASIL level is discussed? Return one of: QM, ASIL_A, ASIL_B, ASIL_C, ASIL_D, Multiple, Unspecified"
+    enum: [QM, ASIL_A, ASIL_B, ASIL_C, ASIL_D, Multiple, Unspecified]
+
+  - name: lifecycle_phase
+    type: string
+    source: gemini
+    prompt: "Which development lifecycle phase does this relate to? Return one of: Concept, Development, Production, Operation, Decommissioning, Multiple, Unspecified"
+    enum: [Concept, Development, Production, Operation, Decommissioning, Multiple, Unspecified]
+
+  - name: failure_modes
+    type: array
+    source: gemini
+    prompt: |
+      List any specific failure modes discussed in this document.
+      Return as JSON array of strings. If none mentioned, return empty array.
+    item_type: string
+
+  # === MANUAL FIELDS ===
+  - name: owner
+    type: string
+    source: manual
+    required: true
+    description: "Functional safety engineer responsible"
+
+  - name: confidentiality
+    type: string
+    source: manual
+    enum: [Public, Internal, Confidential, Restricted]
+    default: Confidential
+
+  - name: revision
+    type: string
+    source: manual
+    default: "1.0"
+
+embedding:
+  model: text-embedding-005
+  dimensions: 768
+  source_fields:
+    - field: summary
+      weight: 1.0
+    - field: keywords
+      weight: 0.5
+      join: ", "
+  text_template: "{summary}\n\nKeywords: {keywords}"
+
+classifier_hints:
+  keywords:
+    - functional safety
+    - ISO 26262
+    - ASIL
+    - FMEA
+    - fault tree
+    - FTA
+    - DFA
+    - safety goal
+    - safety mechanism
+    - diagnostic coverage
+    - single point fault
+    - latent fault
+    - random hardware failure
+    - systematic failure
+    - safety manual
+    - dependent failure
+  example_queries:
+    - "ASIL D requirements for microcontrollers"
+    - "FMEA template for power management IC"
+    - "Diagnostic coverage calculation methods"
+    - "Safety manual for automotive sensor"
+    - "Single point fault metric requirements"
