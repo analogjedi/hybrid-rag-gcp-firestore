@@ -11,7 +11,13 @@ import type { SearchResponse } from "@/types";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { query, limit = 10, threshold = 1.0 } = body;
+    const {
+      query,
+      limit = 10,
+      threshold = 0.25,
+      model = "gemini-3-pro-preview",
+      thinkingLevel = "LOW",
+    } = body;
 
     if (!query || typeof query !== "string") {
       return NextResponse.json(
@@ -21,7 +27,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Call the Cloud Function which handles classification AND vector search
-    const result = await classifyAndSearch(query, limit, threshold);
+    const result = await classifyAndSearch(query, limit, threshold, model, thinkingLevel);
 
     const response: SearchResponse = {
       results: result.results,

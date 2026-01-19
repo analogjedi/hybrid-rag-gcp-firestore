@@ -61,7 +61,7 @@ Output:
 ```
 Collection: products_and_datasheets_documents
   State: READY
-  Fields: contentEmbedding.vector (vector:768)
+  Fields: contentEmbedding.vector (vector:2048)
 ```
 
 **Check documents in a collection:**
@@ -75,7 +75,7 @@ Documents in products_and_datasheets_documents:
   abc123
     File: ACS37630-Datasheet.pdf
     Status: ready
-    Embedding: 768 dimensions
+    Embedding: 2048 dimensions
 ```
 
 **Reset stuck documents:**
@@ -97,7 +97,7 @@ The utilities use hardcoded configuration at the top of each script:
 # manage_indexes.py
 PROJECT_ID = "analog-fusion-knowledge-system"
 DATABASE_ID = "test"
-EMBEDDING_DIMENSION = 768
+EMBEDDING_DIMENSION = 2048
 EMBEDDING_FIELD = "contentEmbedding.vector"
 ```
 

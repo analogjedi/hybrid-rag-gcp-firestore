@@ -99,13 +99,16 @@ export interface ClassificationResult {
   secondary_confidence: number;
   reasoning: string;
   search_strategy: "primary_only" | "primary_then_secondary" | "parallel";
+  exact_match_terms: string[];  // Terms for keyword matching (part numbers, identifiers)
+  semantic_search_terms: string[];  // Terms for semantic/concept matching
 }
 
 export interface SearchResult {
   documentId: string;
   collectionId: string;
-  rawDistance: number;
-  weightedScore: number;
+  rawSimilarity: number | null;  // DOT_PRODUCT similarity (-1 to 1, higher = more similar), null for exact matches
+  weightedScore: number;  // Normalized score (0 to 1)
+  matchType: "exact" | "semantic";  // How this result was matched
   summary: string;
   keywords: string[];
   fileName: string;

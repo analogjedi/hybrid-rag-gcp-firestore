@@ -45,10 +45,10 @@ interface SearchResultCardProps {
 }
 
 function SearchResultCard({ result }: SearchResultCardProps) {
-  // Convert distance to relevance score (0-100%)
-  // COSINE distance ranges from 0 (identical) to 2 (opposite)
-  // We convert to a percentage where higher is better
-  const relevancePercent = Math.round((1 - result.rawDistance / 2) * 100);
+  // Convert DOT_PRODUCT similarity to relevance percentage (0-100%)
+  // weightedScore is already normalized to 0-1 range
+  const relevancePercent = Math.round((result.weightedScore ?? 0) * 100);
+  const isExactMatch = result.matchType === "exact";
 
   return (
     <Card className="hover:bg-muted/50 transition-colors">
@@ -59,6 +59,13 @@ function SearchResultCard({ result }: SearchResultCardProps) {
             <CardTitle className="text-base truncate">
               {result.fileName}
             </CardTitle>
+            {/* Match Type Badge */}
+            <Badge
+              variant={isExactMatch ? "default" : "secondary"}
+              className={`text-xs shrink-0 ${isExactMatch ? "bg-green-600 hover:bg-green-700" : ""}`}
+            >
+              {isExactMatch ? "Exact Match" : "Semantic"}
+            </Badge>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Badge variant="outline">{result.collectionId}</Badge>
@@ -92,9 +99,9 @@ function SearchResultCard({ result }: SearchResultCardProps) {
           <span className="text-xs font-medium w-12">
             {relevancePercent}%
           </span>
-          {result.rawDistance != null && (
+          {result.rawSimilarity != null && (
             <span className="text-xs text-muted-foreground">
-              (d={result.rawDistance.toFixed(3)})
+              (sim={result.rawSimilarity.toFixed(3)})
             </span>
           )}
         </div>

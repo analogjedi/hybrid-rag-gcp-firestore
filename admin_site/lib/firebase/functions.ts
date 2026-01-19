@@ -118,13 +118,16 @@ export async function backfillEmbeddings(
 export async function classifyAndSearch(
   query: string,
   limit: number = 10,
-  threshold: number = 1.0
+  threshold: number = 0.25,
+  model: string = "gemini-3-pro-preview",
+  thinkingLevel: string = "LOW"
 ): Promise<{
   results: Array<{
     documentId: string;
     collectionId: string;
     rawDistance: number | null;
     weightedScore: number;
+    matchType: "exact" | "semantic";
     summary: string;
     keywords: string[];
     fileName: string;
@@ -137,6 +140,8 @@ export async function classifyAndSearch(
     secondary_confidence: number;
     reasoning: string;
     search_strategy: string;
+    exact_match_terms: string[];
+    semantic_search_terms: string[];
   };
   searchMetadata: {
     collectionsSearched: string[];
@@ -144,7 +149,7 @@ export async function classifyAndSearch(
     searchTimeMs: number;
   };
 }> {
-  return callFunction("classify_and_search", { query, limit, threshold });
+  return callFunction("classify_and_search", { query, limit, threshold, model, thinkingLevel });
 }
 
 /**

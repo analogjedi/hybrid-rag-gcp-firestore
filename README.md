@@ -27,14 +27,14 @@ Document Created/Updated
          ├── Detects new/updated content
          │   (compares contentUpdatedAt timestamps)
          │
-         ├── Generates 768-dim embedding
-         │   (Vertex AI text-embedding-005)
+         ├── Generates 2048-dim embedding
+         │   (Vertex AI gemini-embedding-001)
          │
          └── Stores contentEmbedding field
                 {
                   vector: [0.123, -0.456, ...],
                   embeddedAt: ISO timestamp,
-                  modelVersion: "text-embedding-005"
+                  modelVersion: "gemini-embedding-001"
                 }
                 │
                 ▼
@@ -49,10 +49,10 @@ Document Created/Updated
                 │
                 ├── Generate query embedding
                 ├── Call Firestore find_nearest()
-                │   (COSINE distance measure)
+                │   (DOT_PRODUCT distance measure)
                 │
                 ├── Calculate relevance scores
-                │   (distance / 0.4 baseline)
+                │   (similarity normalized to 0-100%)
                 │
                 └── Return ranked results
                     {
@@ -67,23 +67,29 @@ Document Created/Updated
 
 ## Directory Structure
 
-| File | Purpose |
+| Path | Purpose |
 |------|---------|
 | `README.md` | This file - overview and quick start |
+| `CLAUDE.md` | AI assistant context and quick reference |
 | `ARCHITECTURE.md` | Technical deep-dive on data model and design |
-| `RELEVANCE_SCORING.md` | How distance is converted to relevance % |
+| `RELEVANCE_SCORING.md` | How similarity scores are calculated |
 | **admin_site/** | Next.js admin application |
-| `functions/main.py` | Cloud Functions (embedding, search, processing) |
-| `.env.local.example` | Environment variable template |
-| **client_typescript/** | |
-| `types.ts` | TypeScript interfaces |
-| `search_client.ts` | Client wrapper with React hook example |
-| **client_python/** | |
-| `types.py` | Python dataclasses and TypedDict definitions |
-| `search_client.py` | Python client with Streamlit UI support |
-| **setup/** | |
-| `vector_index.md` | gcloud commands for vector index creation |
-| `iam_requirements.md` | IAM roles needed for Cloud Functions |
+| ↳ `functions/main.py` | Cloud Functions (embedding, search, processing) |
+| ↳ `.env.local.example` | Environment variable template |
+| **python_utilities/** | Command-line tools for embedding management |
+| ↳ `README.md` | Utility documentation and workflow guide |
+| ↳ `reset_embeddings.py` | Clear embeddings and reset document status |
+| ↳ `direct_embedding_update.py` | Generate embeddings locally via Vertex AI |
+| **client_typescript/** | TypeScript/React client |
+| ↳ `types.ts` | TypeScript interfaces |
+| ↳ `search_client.ts` | Client wrapper with React hook example |
+| **client_python/** | Python client |
+| ↳ `types.py` | Python dataclasses and TypedDict definitions |
+| ↳ `search_client.py` | Python client with Streamlit UI support |
+| **setup/** | Setup guides |
+| ↳ `vector_index.md` | gcloud commands for vector index creation |
+| ↳ `iam_requirements.md` | IAM roles needed for Cloud Functions |
+| **reference_documentation/** | External reference docs |
 
 ## Quick Start
 
@@ -115,10 +121,10 @@ firebase deploy --only functions
 
 ```bash
 gcloud firestore indexes composite create \
-  --collection-group=documents \
-  --query-scope=COLLECTION_GROUP \
-  --field-config=field-path=contentEmbedding.vector,vector-config='{"dimension":"768","flat":"{}"}' \
-  --database="(default)" \
+  --collection-group=YOUR_COLLECTION_documents \
+  --query-scope=COLLECTION \
+  --field-config='field-path=contentEmbedding.vector,vector-config={"dimension":"2048","flat":"{}"}' \
+  --database=test \
   --project=YOUR_PROJECT_ID
 ```
 
@@ -182,7 +188,7 @@ This reference uses a semiconductor documentation example:
 | Technology | Purpose |
 |------------|---------|
 | Firebase Firestore | Document database with vector search |
-| Vertex AI | Embedding model (`text-embedding-005`) and Gemini (`gemini-2.0-flash-001`) |
+| Vertex AI | Embedding model (`gemini-embedding-001`, 2048 dims) and Gemini (`gemini-2.0-flash-001`) |
 | Firebase Cloud Functions | Serverless compute (Python) |
 | Next.js / React | Admin site and web client |
 | Python/Streamlit | Python client and dashboard UI |
@@ -196,6 +202,20 @@ This reference uses a semiconductor documentation example:
 | Firestore writes | ~$0.18 per 100K writes |
 | Function invocations | ~$0.0000004 per invocation |
 | Vector index storage | Included in Firestore storage |
+
+## Documentation
+
+For detailed information, see:
+
+| Document | Purpose |
+|----------|---------|
+| `CLAUDE.md` | Quick reference for AI assistants and developers |
+| `ARCHITECTURE.md` | Data model, embedding patterns, technical deep-dive |
+| `RELEVANCE_SCORING.md` | DOT_PRODUCT similarity to percentage conversion |
+| `setup/vector_index.md` | Vector index creation and management |
+| `setup/iam_requirements.md` | IAM roles for Cloud Functions |
+| `python_utilities/README.md` | CLI tools for embedding management |
+| `admin_site/docs/GOOGLE_CLOUD_SETUP.md` | Complete GCP setup guide |
 
 ## Further Reading
 

@@ -1,13 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Header } from "@/components/layout/Header";
 import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
 import { SearchBar } from "@/components/search/SearchBar";
 import { SearchResults } from "@/components/search/SearchResults";
 import { ClassificationPanel } from "@/components/search/ClassificationPanel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Search, Brain, Database, Sparkles } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Search, Brain, Database, Sparkles, SlidersHorizontal, Cpu, Zap } from "lucide-react";
 import type { SearchResponse, ClassificationResult, SearchResult } from "@/types";
 
 export default function SearchPage() {
@@ -22,10 +32,25 @@ export default function SearchPage() {
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSearch = async (searchQuery: string) => {
+  // Threshold controls
+  const [threshold, setThreshold] = useState(0.25);
+  const [showAll, setShowAll] = useState(false);
+  const [lastSearchQuery, setLastSearchQuery] = useState("");
+
+  // Model and thinking controls
+  const [model, setModel] = useState<"gemini-3-pro-preview" | "gemini-3-flash-preview">("gemini-3-pro-preview");
+  const [thinkingLevel, setThinkingLevel] = useState<"LOW" | "HIGH">("LOW");
+
+  const performSearch = useCallback(async (
+    searchQuery: string,
+    searchThreshold: number,
+    searchModel: string,
+    searchThinkingLevel: string
+  ) => {
     setIsSearching(true);
     setError(null);
     setQuery(searchQuery);
+    setLastSearchQuery(searchQuery);
 
     try {
       const response = await fetch("/api/search", {
@@ -33,8 +58,10 @@ export default function SearchPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query: searchQuery,
-          limit: 10,
-          threshold: 1.0,
+          limit: 20,  // Fetch more to allow filtering
+          threshold: searchThreshold,
+          model: searchModel,
+          thinkingLevel: searchThinkingLevel,
         }),
       });
 
@@ -55,6 +82,46 @@ export default function SearchPage() {
     } finally {
       setIsSearching(false);
     }
+  }, []); // No deps needed - all params passed explicitly
+
+  const handleSearch = async (searchQuery: string) => {
+    const effectiveThreshold = showAll ? -1 : threshold;
+    await performSearch(searchQuery, effectiveThreshold, model, thinkingLevel);
+  };
+
+  const handleThresholdChange = async (value: number[]) => {
+    const newThreshold = value[0];
+    setThreshold(newThreshold);
+    // Re-search if we have an active query
+    if (lastSearchQuery && !showAll) {
+      await performSearch(lastSearchQuery, newThreshold, model, thinkingLevel);
+    }
+  };
+
+  const handleShowAllChange = async (checked: boolean) => {
+    setShowAll(checked);
+    // Re-search if we have an active query
+    if (lastSearchQuery) {
+      await performSearch(lastSearchQuery, checked ? -1 : threshold, model, thinkingLevel);
+    }
+  };
+
+  const handleModelChange = async (value: "gemini-3-pro-preview" | "gemini-3-flash-preview") => {
+    setModel(value);
+    // Re-search if we have an active query
+    if (lastSearchQuery) {
+      const effectiveThreshold = showAll ? -1 : threshold;
+      await performSearch(lastSearchQuery, effectiveThreshold, value, thinkingLevel);
+    }
+  };
+
+  const handleThinkingLevelChange = async (value: "LOW" | "HIGH") => {
+    setThinkingLevel(value);
+    // Re-search if we have an active query
+    if (lastSearchQuery) {
+      const effectiveThreshold = showAll ? -1 : threshold;
+      await performSearch(lastSearchQuery, effectiveThreshold, model, value);
+    }
   };
 
   return (
@@ -69,6 +136,73 @@ export default function SearchPage() {
 
         {/* Search Bar */}
         <SearchBar onSearch={handleSearch} isSearching={isSearching} />
+
+        {/* Search Controls */}
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex flex-wrap items-center gap-6">
+              {/* Model Selection */}
+              <div className="flex items-center gap-2">
+                <Cpu className="h-4 w-4 text-muted-foreground" />
+                <Label className="text-sm font-medium">Model</Label>
+                <Select value={model} onValueChange={handleModelChange}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gemini-3-pro-preview">Gemini 3 Pro</SelectItem>
+                    <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Thinking Level */}
+              <div className="flex items-center gap-2 border-l pl-6">
+                <Zap className="h-4 w-4 text-muted-foreground" />
+                <Label className="text-sm font-medium">Thinking</Label>
+                <Select value={thinkingLevel} onValueChange={handleThinkingLevelChange}>
+                  <SelectTrigger className="w-24">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="LOW">Low</SelectItem>
+                    <SelectItem value="HIGH">High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Threshold Slider */}
+              <div className="flex items-center gap-3 border-l pl-6">
+                <SlidersHorizontal className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-sm font-medium shrink-0">Threshold</span>
+                <Slider
+                  value={[threshold]}
+                  onValueChange={handleThresholdChange}
+                  min={0}
+                  max={0.7}
+                  step={0.05}
+                  disabled={showAll}
+                  className="w-[120px]"
+                />
+                <span className="text-sm font-mono w-10">
+                  {showAll ? "Off" : `${(threshold * 100).toFixed(0)}%`}
+                </span>
+              </div>
+
+              {/* Show All Toggle */}
+              <div className="flex items-center gap-2 border-l pl-6">
+                <Switch
+                  id="show-all"
+                  checked={showAll}
+                  onCheckedChange={handleShowAllChange}
+                />
+                <Label htmlFor="show-all" className="text-sm cursor-pointer whitespace-nowrap">
+                  Show All
+                </Label>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Error */}
         {error && (

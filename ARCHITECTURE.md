@@ -17,9 +17,9 @@ Documents that need semantic search should include a `content` field (or similar
 │   └── ...other fields
 │   }
 └── contentEmbedding: {
-    ├── vector: Vector([0.123, -0.456, ...])  ← 768 floats
+    ├── vector: Vector([0.123, -0.456, ...])  ← 2048 floats
     ├── embeddedAt: "2026-01-03T14:30:05Z"
-    └── modelVersion: "text-embedding-005"
+    └── modelVersion: "gemini-embedding-001"
     }
 ```
 
@@ -27,9 +27,9 @@ Documents that need semantic search should include a `content` field (or similar
 
 ```typescript
 interface ContentEmbedding {
-  vector: number[];        // 768-dimensional embedding (Firestore Vector type)
+  vector: number[];        // 2048-dimensional embedding (Firestore Vector type)
   embeddedAt: string;      // ISO timestamp (e.g., "2026-01-04T00:00:00.560010Z")
-  modelVersion: string;    // "text-embedding-005"
+  modelVersion: string;    // "gemini-embedding-001"
 }
 ```
 
@@ -88,28 +88,39 @@ Use trigger-based for automatic consistency. Use on-demand for:
 
 | Property | Value |
 |----------|-------|
-| **Model** | `text-embedding-005` |
+| **Model** | `gemini-embedding-001` |
 | **Provider** | Vertex AI |
-| **Output Dimensions** | 768 (configurable up to 3072) |
+| **Output Dimensions** | 2048 (configurable, max 3072) |
 | **Firestore Max** | 2048 dimensions |
-| **Task Type** | General text embedding |
+| **Task Types** | `RETRIEVAL_DOCUMENT` (corpus), `RETRIEVAL_QUERY` (search) |
 
-### Why 768 Dimensions?
+### Why gemini-embedding-001?
 
-- Balances quality with storage efficiency
-- Well within Firestore's 2048 limit
-- Sufficient for semantic similarity matching
-- Matches many pre-trained models
+- Google's state-of-the-art embedding model
+- Supports asymmetric search (different task types for docs vs queries)
+- Higher quality semantic matching than text-embedding-005
+- Supports dimensionality reduction without retraining
+
+### Why 2048 Dimensions?
+
+- Maximum supported by Firestore vector search
+- Higher dimensions capture more semantic nuance
+- Optimal balance for gemini-embedding-001 quality
 
 ### API Call Example
 
 ```python
 from vertexai.language_models import TextEmbeddingInput, TextEmbeddingModel
 
-model = TextEmbeddingModel.from_pretrained("text-embedding-005")
+model = TextEmbeddingModel.from_pretrained("gemini-embedding-001")
+
+# For corpus documents
 inputs = [TextEmbeddingInput(text_to_embed, "RETRIEVAL_DOCUMENT")]
-embeddings = model.get_embeddings(inputs, output_dimensionality=768)
-embedding_values = embeddings[0].values
+embeddings = model.get_embeddings(inputs, output_dimensionality=2048)
+
+# For search queries (use different task type!)
+query_inputs = [TextEmbeddingInput(query_text, "RETRIEVAL_QUERY")]
+query_embeddings = model.get_embeddings(query_inputs, output_dimensionality=2048)
 ```
 
 Note: Vertex AI uses Application Default Credentials (ADC). No API key is required when running in Cloud Functions or with a service account.
@@ -124,10 +135,10 @@ Firestore requires a vector index for similarity searches. Without an index, `fi
 
 | Property | Value | Notes |
 |----------|-------|-------|
-| **Collection Group** | Your collection name | e.g., `documents` |
-| **Query Scope** | `COLLECTION_GROUP` | Searches across subcollections |
+| **Collection Group** | Your collection name | e.g., `products_documents` |
+| **Query Scope** | `COLLECTION` | Searches within collection |
 | **Field Path** | `contentEmbedding.vector` | Nested under embedding object |
-| **Dimensions** | 768 | Must match embedding model |
+| **Dimensions** | 2048 | Must match embedding model output |
 | **Index Type** | `flat` | Good for < 1M vectors |
 
 ### Index Types
@@ -143,10 +154,10 @@ For most applications, `flat` is sufficient and provides exact results.
 
 ```bash
 gcloud firestore indexes composite create \
-  --collection-group=documents \
-  --query-scope=COLLECTION_GROUP \
-  --field-config=field-path=contentEmbedding.vector,vector-config='{"dimension":"768","flat":"{}"}' \
-  --database="(default)" \
+  --collection-group=YOUR_COLLECTION_documents \
+  --query-scope=COLLECTION \
+  --field-config='field-path=contentEmbedding.vector,vector-config={"dimension":"2048","flat":"{}"}' \
+  --database=test \
   --project=YOUR_PROJECT_ID
 ```
 
@@ -158,25 +169,27 @@ Firestore supports three distance measures:
 
 | Measure | Range | Best For |
 |---------|-------|----------|
-| **COSINE** | 0 to 2 | Text similarity (recommended) |
+| COSINE | 0 to 2 | Text similarity (angle-based) |
 | EUCLIDEAN | 0 to ∞ | Spatial data |
-| DOT_PRODUCT | -∞ to ∞ | Normalized vectors |
+| **DOT_PRODUCT** | -1 to 1 | Normalized vectors (recommended) |
 
-### Why COSINE?
+### Why DOT_PRODUCT?
 
-- Range is bounded (0-2), easy to convert to percentage
-- Direction-based (angle between vectors)
-- Handles varying text lengths well
-- Industry standard for text embeddings
+- Best performance with normalized embedding vectors
+- `gemini-embedding-001` outputs normalized vectors by default
+- Higher values = more similar (intuitive)
+- Computationally efficient
 
-### Distance Interpretation
+### Similarity Interpretation (DOT_PRODUCT)
 
-| COSINE Distance | Meaning |
-|-----------------|---------|
-| 0.0 | Identical |
-| 0.2 | Very similar |
-| 0.4 | Somewhat similar |
-| 0.6+ | Dissimilar |
+| Similarity Score | Meaning |
+|------------------|---------|
+| 1.0 | Identical |
+| 0.7+ | Very similar |
+| 0.4-0.7 | Somewhat similar |
+| < 0.4 | Dissimilar |
+
+Note: DOT_PRODUCT returns similarity (higher = better), not distance (lower = better) like COSINE.
 
 ---
 

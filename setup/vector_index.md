@@ -8,10 +8,10 @@ Run this command to create the vector index:
 
 ```bash
 gcloud firestore indexes composite create \
-  --collection-group=documents \
-  --query-scope=COLLECTION_GROUP \
-  --field-config=field-path=contentEmbedding.vector,vector-config='{"dimension":"768","flat":"{}"}' \
-  --database="(default)" \
+  --collection-group=YOUR_COLLECTION_documents \
+  --query-scope=COLLECTION \
+  --field-config='field-path=contentEmbedding.vector,vector-config={"dimension":"2048","flat":"{}"}' \
+  --database=test \
   --project=YOUR_PROJECT_ID
 ```
 
@@ -26,7 +26,7 @@ Replace:
 | `--collection-group` | `documents` | Collection(s) to index |
 | `--query-scope` | `COLLECTION_GROUP` | Search across all subcollections |
 | `--field-path` | `contentEmbedding.vector` | Path to the vector field |
-| `dimension` | `768` | Must match embedding model output |
+| `dimension` | `2048` | Must match embedding model output |
 | `flat` | `{}` | Index type (see below) |
 
 ## Index Types
@@ -34,7 +34,7 @@ Replace:
 ### Flat Index (Recommended for < 1M documents)
 
 ```json
-{"dimension":"768","flat":"{}"}
+{"dimension":"2048","flat":"{}"}
 ```
 
 - **Pros**: Exact results, simpler
@@ -44,7 +44,7 @@ Replace:
 ### HNSW Index (For > 1M documents)
 
 ```json
-{"dimension":"768","hnsw":{"m":16,"ef_construction":200}}
+{"dimension":"2048","hnsw":{"m":16,"ef_construction":200}}
 ```
 
 - **Pros**: Faster for large collections
@@ -102,7 +102,7 @@ The index dimension doesn't match your embedding dimension.
 
 **Solution:**
 1. Delete the existing index
-2. Recreate with correct dimension (768 for text-embedding-005)
+2. Recreate with correct dimension (2048 for gemini-embedding-001)
 
 ### Error: "Permission denied"
 
@@ -135,14 +135,14 @@ If you have multiple collections with embeddings, create an index for each:
 gcloud firestore indexes composite create \
   --collection-group=design_specs \
   --query-scope=COLLECTION_GROUP \
-  --field-config=field-path=contentEmbedding.vector,vector-config='{"dimension":"768","flat":"{}"}' \
+  --field-config=field-path=contentEmbedding.vector,vector-config='{"dimension":"2048","flat":"{}"}' \
   --project=YOUR_PROJECT_ID
 
 # Process docs collection
 gcloud firestore indexes composite create \
   --collection-group=process_docs \
   --query-scope=COLLECTION_GROUP \
-  --field-config=field-path=contentEmbedding.vector,vector-config='{"dimension":"768","flat":"{}"}' \
+  --field-config=field-path=contentEmbedding.vector,vector-config='{"dimension":"2048","flat":"{}"}' \
   --project=YOUR_PROJECT_ID
 ```
 

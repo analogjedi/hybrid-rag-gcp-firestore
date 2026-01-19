@@ -37,7 +37,7 @@ Enterprise document management with AI-powered semantic search using Firestore V
 1. **Upload**: PDF stored in Cloud Storage, document record created in Firestore (status: `pending`)
 2. **Process**: Click "Process" in UI to trigger Gemini multimodal analysis
 3. **Extract**: Metadata fields extracted based on collection schema (status: `metadata_ready`)
-4. **Embed**: Generate 768-dim vector embedding via Cloud Function (status: `ready`)
+4. **Embed**: Generate 2048-dim vector embedding via Cloud Function (status: `ready`)
 5. **Search**: Document now searchable via vector similarity with relevance scores
 
 ## Pre-defined Collections
@@ -124,7 +124,7 @@ Open [http://localhost:3000](http://localhost:3000).
 - **Framework**: Next.js 15 (App Router)
 - **Styling**: Tailwind CSS v4 + shadcn/ui
 - **Backend**: Firebase Admin SDK
-- **AI**: Vertex AI (Gemini 2.0 Flash, text-embedding-005)
+- **AI**: Vertex AI (Gemini 2.0 Flash, gemini-embedding-001)
 - **Database**: Firestore with Vector Search
 - **Storage**: Cloud Storage
 
@@ -159,9 +159,9 @@ All functions are HTTP-callable (triggers don't work with non-default Firestore 
 ## Search Flow
 
 1. **Query Classification**: Gemini analyzes the query and routes it to the most relevant collection(s)
-2. **Embedding**: Query is converted to a 768-dimension vector using `text-embedding-005`
-3. **Vector Search**: Firestore `find_nearest()` finds documents with similar embeddings
-4. **Relevance Scoring**: Results include cosine distance (0=identical, 2=opposite) converted to % relevance
+2. **Embedding**: Query is converted to a 2048-dimension vector using `gemini-embedding-001` with `RETRIEVAL_QUERY` task type
+3. **Vector Search**: Firestore `find_nearest()` with DOT_PRODUCT finds documents with similar embeddings
+4. **Relevance Scoring**: Results include similarity score (higher = more similar) converted to % relevance
 
 ### Search Response
 
@@ -206,8 +206,8 @@ fields:
     prompt: "..."   # For gemini fields
 
 embedding:
-  model: text-embedding-005
-  dimensions: 768
+  model: gemini-embedding-001
+  dimensions: 2048
   text_template: "{summary}\n\nKeywords: {keywords}"
 
 classifier_hints:

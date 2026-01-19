@@ -541,6 +541,7 @@ def generate_embedding(text: str, task_type: str = "RETRIEVAL_DOCUMENT") -> list
 @https_fn.on_call(
     memory=options.MemoryOption.GB_1,
     timeout_sec=120,
+    secrets=["GEMINI_API_KEY"],
 )
 def classify_and_search(req: https_fn.CallableRequest) -> dict[str, Any]:
     """
@@ -549,7 +550,9 @@ def classify_and_search(req: https_fn.CallableRequest) -> dict[str, Any]:
     Input:
     - query: The user's search query
     - limit: Max results per collection (default 10)
-    - threshold: Max distance threshold (default 1.0)
+    - threshold: Min similarity threshold for DOT_PRODUCT (default 0.3)
+    - model: Gemini model to use for classification (default: gemini-2.5-pro-preview-05-06)
+    - thinkingLevel: Thinking budget - "LOW" or "HIGH" (default: LOW)
 
     Returns:
     - results: Merged search results
@@ -562,13 +565,19 @@ def classify_and_search(req: https_fn.CallableRequest) -> dict[str, Any]:
 
     query = req.data.get("query", "")
     limit = req.data.get("limit", 10)
-    threshold = req.data.get("threshold", 1.0)
+    # DOT_PRODUCT threshold: minimum similarity to include (0.3 = moderately similar)
+    threshold = req.data.get("threshold", 0.3)
+    # Model selection and thinking level
+    model_name = req.data.get("model", "gemini-3-pro-preview")
+    thinking_level = req.data.get("thinkingLevel", "LOW")
 
     if not query:
         raise https_fn.HttpsError(
             code=https_fn.FunctionsErrorCode.INVALID_ARGUMENT,
             message="Query is required",
         )
+
+    print(f"[DEBUG] Using model: {model_name}, thinking: {thinking_level}")
 
     db = get_db()
 
@@ -581,8 +590,12 @@ def classify_and_search(req: https_fn.CallableRequest) -> dict[str, Any]:
 
     schemas = [doc.to_dict() for doc in schemas_docs]
 
-    # Classify the query
-    classification = classify_query(query, schemas)
+    # Classify the query and extract search terms
+    classification = classify_query(query, schemas, model_name, thinking_level)
+
+    # Extract search terms from classification
+    exact_terms = classification.get("exact_match_terms", [])
+    semantic_terms = classification.get("semantic_search_terms", [])
 
     # Search collections based on classification
     results = []
@@ -595,6 +608,8 @@ def classify_and_search(req: https_fn.CallableRequest) -> dict[str, Any]:
         query,
         limit,
         threshold,
+        exact_terms=exact_terms,
+        semantic_terms=semantic_terms,
     )
     results.extend(primary_results)
     collections_searched.append(classification["primary_collection"])
@@ -609,6 +624,8 @@ def classify_and_search(req: https_fn.CallableRequest) -> dict[str, Any]:
                 query,
                 secondary_limit,
                 threshold,
+                exact_terms=exact_terms,
+                semantic_terms=semantic_terms,
             )
             results.extend(secondary_results)
             collections_searched.append(secondary_id)
@@ -632,9 +649,26 @@ def classify_and_search(req: https_fn.CallableRequest) -> dict[str, Any]:
     }
 
 
-def classify_query(query: str, schemas: list[dict[str, Any]]) -> dict[str, Any]:
-    """Classify a query to determine which collection(s) to search."""
-    model = GenerativeModel(GEMINI_MODEL)
+def classify_query(
+    query: str,
+    schemas: list[dict[str, Any]],
+    model_name: str = "gemini-3-pro-preview",
+    thinking_level: str = "LOW",
+) -> dict[str, Any]:
+    """Classify a query to determine which collection(s) to search and extract search terms."""
+    from google import genai
+    from google.genai import types
+
+    # Get API key from environment (injected by Firebase secrets)
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY not configured")
+
+    # Create client with Vertex AI mode
+    client = genai.Client(
+        vertexai=True,
+        api_key=api_key,
+    )
 
     # Build collection descriptions
     collections_info = []
@@ -656,7 +690,9 @@ Available document collections:
 
 User query: "{query}"
 
-Analyze the query and determine which collection(s) would most likely contain relevant documents.
+Analyze the query and determine:
+1. Which collection(s) would most likely contain relevant documents
+2. What terms should be matched exactly vs semantically
 
 Return a JSON object with:
 - primary_collection: The collection ID most likely to have relevant results
@@ -665,18 +701,42 @@ Return a JSON object with:
 - secondary_confidence: Average confidence for secondary collections (0.0 if none)
 - reasoning: Brief explanation of your routing decision
 - search_strategy: One of "primary_only", "primary_then_secondary", or "parallel"
+- exact_match_terms: Array of terms that should be matched exactly (part numbers, model numbers, specific identifiers like "AHV85003", "ACS37630", SKUs, product codes). These are typically alphanumeric codes that have no semantic meaning.
+- semantic_search_terms: Array of terms for semantic/conceptual matching (descriptions, concepts like "SiC driver", "current sensor", "gate driver")
 
 Use "primary_only" if very confident (>0.8) the query belongs to one collection.
 Use "primary_then_secondary" if moderately confident but want fallback.
-Use "parallel" if the query spans multiple domains equally."""
+Use "parallel" if the query spans multiple domains equally.
 
-    response = model.generate_content(
-        prompt,
-        generation_config={
-            "temperature": 0.1,
-            "max_output_tokens": 1024,
-            "response_mime_type": "application/json",
-        },
+Examples of term extraction:
+- "AHV85003 SiC driver" -> exact_match_terms: ["AHV85003"], semantic_search_terms: ["SiC driver", "gate driver"]
+- "current sensor hall effect" -> exact_match_terms: [], semantic_search_terms: ["current sensor", "hall effect"]
+- "find datasheet for ACS37630" -> exact_match_terms: ["ACS37630"], semantic_search_terms: ["datasheet"]"""
+
+    # Configure generation with thinking
+    config = types.GenerateContentConfig(
+        temperature=0.1,
+        max_output_tokens=8192,
+        response_mime_type="application/json",
+        thinking_config=types.ThinkingConfig(
+            thinking_level=thinking_level,  # "LOW" or "HIGH"
+        ),
+    )
+
+    print(f"[DEBUG] classify_query: model={model_name}, thinking_level={thinking_level}")
+
+    # Create content
+    contents = [
+        types.Content(
+            role="user",
+            parts=[types.Part(text=prompt)],
+        )
+    ]
+
+    response = client.models.generate_content(
+        model=model_name,
+        contents=contents,
+        config=config,
     )
 
     response_text = response.text.strip()
@@ -687,21 +747,88 @@ Use "parallel" if the query spans multiple domains equally."""
     return json.loads(response_text)
 
 
+def calculate_relevance_score(similarity: float | None) -> float:
+    """
+    Convert DOT_PRODUCT similarity to a relevance score with better differentiation.
+
+    Old formula: (similarity + 1) / 2  → compressed 0.3-0.7 into 65%-85%
+    New formula: Scale practical range (0.25-0.75) to 0-100%
+
+    This gives much better differentiation:
+    - 0.75+ similarity → 100% (excellent match)
+    - 0.50 similarity → 50% (moderate match)
+    - 0.25 similarity → 0% (poor match)
+    """
+    if similarity is None:
+        return 0.0
+
+    # Scale from practical range [0.25, 0.75] to [0, 1]
+    # Clamp to ensure we stay in 0-1 range
+    return max(0.0, min(1.0, (similarity - 0.25) / 0.5))
+
+
 def search_collection(
     db,
     collection_id: str,
     query: str,
     limit: int,
     threshold: float,
+    exact_terms: list[str] | None = None,
+    semantic_terms: list[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Search a single collection using vector similarity."""
-    # Generate query embedding with RETRIEVAL_QUERY task type (asymmetric search)
-    query_vector = generate_embedding(query, task_type="RETRIEVAL_QUERY")
+    """
+    Search a single collection using hybrid keyword + vector similarity.
 
-    # Documents are stored in {collection_id}_documents
+    Hybrid search flow:
+    1. If exact_terms provided: Find documents with matching keywords (boosted score)
+    2. Perform semantic vector search using semantic_terms or full query
+    3. Merge results, avoiding duplicates, with exact matches ranked higher
+    """
     docs_ref = db.collection(f"{collection_id}_documents")
+    results = []
+    seen_doc_ids = set()
 
-    # Use Firestore vector search with DOT_PRODUCT (most efficient for normalized vectors)
+    # Phase 1: Exact keyword matches (if exact_terms provided)
+    if exact_terms:
+        print(f"[DEBUG] Searching for exact terms: {exact_terms}")
+        for term in exact_terms:
+            # Search for term in keywords array (case-insensitive would need preprocessing)
+            # Firestore array_contains is case-sensitive, so we check for exact match
+            keyword_query = docs_ref.where(
+                "content.keywords", "array_contains", term
+            ).limit(limit)
+
+            for doc in keyword_query.get():
+                if doc.id in seen_doc_ids:
+                    continue
+
+                doc_data = doc.to_dict()
+                content = doc_data.get("content", {})
+
+                # Exact keyword match gets high boosted score
+                results.append(
+                    {
+                        "documentId": doc.id,
+                        "collectionId": collection_id,
+                        "rawSimilarity": None,  # No vector similarity for keyword match
+                        "weightedScore": 0.95,  # High score for exact match
+                        "matchType": "exact",
+                        "summary": content.get("summary", ""),
+                        "keywords": content.get("keywords", []),
+                        "fileName": doc_data.get("fileName", ""),
+                        "storagePath": doc_data.get("storagePath", ""),
+                    }
+                )
+                seen_doc_ids.add(doc.id)
+                print(f"[DEBUG] Exact match: {doc.id} for term '{term}'")
+
+    # Phase 2: Semantic vector search
+    # Use semantic_terms if available, otherwise use the full query
+    search_text = " ".join(semantic_terms) if semantic_terms else query
+    print(f"[DEBUG] Semantic search text: '{search_text}'")
+
+    query_vector = generate_embedding(search_text, task_type="RETRIEVAL_QUERY")
+
     vector_query = docs_ref.find_nearest(
         vector_field="contentEmbedding.vector",
         query_vector=Vector(query_vector),
@@ -710,28 +837,44 @@ def search_collection(
         distance_result_field="vector_distance",
     )
 
-    results = []
     for doc in vector_query.get():
+        # Skip if already found in exact match phase
+        if doc.id in seen_doc_ids:
+            print(f"[DEBUG] Skipping {doc.id} - already found as exact match")
+            continue
+
         doc_data = doc.to_dict()
         content = doc_data.get("content", {})
 
         # DOT_PRODUCT: higher = more similar (range -1 to 1 for normalized vectors)
         similarity = doc_data.get("vector_distance")
 
+        print(f"[DEBUG] Semantic match: {doc.id}, similarity={similarity}, fileName={doc_data.get('fileName', 'N/A')}")
+
+        # Apply threshold filtering for semantic results
+        if similarity is not None and similarity < threshold:
+            print(f"[DEBUG] Filtered out {doc.id} - below threshold {threshold}")
+            continue
+
         results.append(
             {
                 "documentId": doc.id,
                 "collectionId": collection_id,
                 "rawSimilarity": similarity,
-                # Normalize DOT_PRODUCT from [-1,1] to [0,1] for consistent scoring
-                "weightedScore": ((similarity or 0) + 1) / 2 if similarity is not None else 0.5,
+                "weightedScore": calculate_relevance_score(similarity),
+                "matchType": "semantic",
                 "summary": content.get("summary", ""),
                 "keywords": content.get("keywords", []),
                 "fileName": doc_data.get("fileName", ""),
                 "storagePath": doc_data.get("storagePath", ""),
             }
         )
+        seen_doc_ids.add(doc.id)
 
+    # Sort by weightedScore descending
+    results.sort(key=lambda x: x.get("weightedScore", 0), reverse=True)
+
+    print(f"[DEBUG] Collection {collection_id}: Found {len(results)} results (exact: {sum(1 for r in results if r.get('matchType') == 'exact')}, semantic: {sum(1 for r in results if r.get('matchType') == 'semantic')})")
     return results
 
 

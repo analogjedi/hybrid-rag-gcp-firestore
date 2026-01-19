@@ -209,7 +209,7 @@ VERTEX_AI_LOCATION=us-central1
 
 # Optional: Customize models
 GEMINI_MODEL=gemini-2.0-flash-001
-EMBEDDING_MODEL=text-embedding-005
+EMBEDDING_MODEL=gemini-embedding-001
 ```
 
 ---
@@ -247,7 +247,7 @@ cd admin_site/functions
 
 ### Index Details
 - **Field**: `contentEmbedding.vector`
-- **Dimension**: 768 (for text-embedding-005)
+- **Dimension**: 2048 (for gemini-embedding-001)
 - **Type**: Flat index (best for <10k documents)
 - **Build time**: 1-5 minutes depending on data size
 - **Auto-updates**: New documents are automatically indexed once the index exists
@@ -566,7 +566,7 @@ Edit the constants at the top of `manage_indexes.py` if using a different projec
 ```python
 PROJECT_ID = "analog-fusion-knowledge-system"
 DATABASE_ID = "test"
-EMBEDDING_DIMENSION = 768
+EMBEDDING_DIMENSION = 2048
 EMBEDDING_FIELD = "contentEmbedding.vector"
 ```
 
@@ -622,7 +622,7 @@ firestore_embeddings_reference/
 | `VERTEX_AI_PROJECT` | Yes | Vertex AI project | `my-project-123` |
 | `VERTEX_AI_LOCATION` | Yes | Vertex AI region | `us-central1` |
 | `GEMINI_MODEL` | No | Gemini model name | `gemini-2.0-flash-001` |
-| `EMBEDDING_MODEL` | No | Embedding model | `text-embedding-005` |
+| `EMBEDDING_MODEL` | No | Embedding model | `gemini-embedding-001` |
 | `FUNCTIONS_REGION` | No | Cloud Functions region | `us-central1` |
 
 ---
