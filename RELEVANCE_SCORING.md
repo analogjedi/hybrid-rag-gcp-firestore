@@ -111,6 +111,62 @@ function getRelevanceColor(score: number): string {
 </span>
 ```
 
+### Pattern 5: Debug Mode Score Breakdown
+
+When debug mode is enabled, show individual scores for each search permutation:
+
+```
+Combined Score ████████████████████ 95%
+
+Score Breakdown:
+  ✓ Exact "AHV85003"    ████████████████████ 95%
+  ◈ "SiC driver"        ████████████░░░░░░░░ 62%  (sim=0.560)
+  ◈ "gate driver"       ███████████░░░░░░░░░ 58%  (sim=0.540)
+  ⌕ Full query          █████████████░░░░░░░ 66%  (sim=0.580)
+```
+
+```tsx
+{result.scoreBreakdown && (
+  <div className="score-breakdown">
+    <p>Score Breakdown:</p>
+
+    {/* Exact matches */}
+    {result.scoreBreakdown.exactMatches.map(match => (
+      <ScoreRow
+        icon="✓"
+        label={`Exact "${match.term}"`}
+        score={match.matched ? 95 : 0}
+      />
+    ))}
+
+    {/* Semantic term scores */}
+    {result.scoreBreakdown.semanticScores.map(score => (
+      <ScoreRow
+        icon="◈"
+        label={`"${score.term}"`}
+        score={Math.round(score.score * 100)}
+        similarity={score.similarity}
+      />
+    ))}
+
+    {/* Full query score */}
+    {result.scoreBreakdown.fullQueryScore && (
+      <ScoreRow
+        icon="⌕"
+        label="Full query"
+        score={Math.round(result.scoreBreakdown.fullQueryScore.score * 100)}
+        similarity={result.scoreBreakdown.fullQueryScore.similarity}
+      />
+    )}
+  </div>
+)}
+```
+
+This pattern helps identify:
+- Whether exact keyword matching found the document
+- Which semantic terms contributed most to the score
+- How the full query compares to individual terms
+
 ## Threshold Configuration
 
 Users can adjust the similarity threshold to control strictness:
@@ -126,22 +182,39 @@ Threshold: 0.5 (default)
 
 ### Python (Cloud Function)
 
+The basic formula maps similarity directly to percentage:
+
 ```python
-def calculate_relevance(similarity: float) -> int:
+def calculate_relevance_basic(similarity: float) -> int:
     """Convert DOT_PRODUCT similarity to relevance percentage."""
-    # DOT_PRODUCT with normalized vectors: -1 to 1
-    # For search, we only care about positive similarity
     relevance = similarity * 100
     return max(0, min(100, int(relevance)))
+```
+
+For better score differentiation, we scale the practical range (0.25-0.75) to 0-100%:
+
+```python
+def calculate_relevance_score(similarity: float | None) -> float:
+    """
+    Enhanced scoring with better differentiation.
+
+    Scales the practical similarity range [0.25, 0.75] to [0%, 100%]:
+    - 0.75+ similarity → 100% (excellent match)
+    - 0.50 similarity → 50% (moderate match)
+    - 0.25 similarity → 0% (poor match)
+    """
+    if similarity is None:
+        return 0.0
+    return max(0.0, min(1.0, (similarity - 0.25) / 0.5))
 ```
 
 ### TypeScript (Client)
 
 ```typescript
-function calculateRelevance(similarity: number): number {
-  // DOT_PRODUCT with normalized vectors: -1 to 1
-  const relevance = similarity * 100;
-  return Math.max(0, Math.min(100, Math.round(relevance)));
+function calculateRelevanceScore(similarity: number | null): number {
+  if (similarity === null) return 0;
+  // Scale [0.25, 0.75] to [0, 1]
+  return Math.max(0, Math.min(1, (similarity - 0.25) / 0.5));
 }
 ```
 

@@ -8,7 +8,9 @@ Enterprise document management with AI-powered semantic search using Firestore V
 - **AI Metadata Extraction**: Gemini 2.0 Flash analyzes PDFs and extracts structured metadata
 - **Auto-Generated Embeddings**: Vector embeddings for semantic search
 - **Agentic Query Routing**: AI classifies queries to search the right collection(s)
+- **Hybrid Search**: Combines exact keyword matching with semantic vector similarity
 - **Multi-Collection Search**: Unified search results across multiple collections
+- **Debug Mode**: Inspect individual search permutation scores for tuning
 
 ## Architecture
 
@@ -158,10 +160,31 @@ All functions are HTTP-callable (triggers don't work with non-default Firestore 
 
 ## Search Flow
 
-1. **Query Classification**: Gemini analyzes the query and routes it to the most relevant collection(s)
-2. **Embedding**: Query is converted to a 2048-dimension vector using `gemini-embedding-001` with `RETRIEVAL_QUERY` task type
+1. **Query Classification**: Gemini analyzes the query and extracts:
+   - `exact_match_terms`: Part numbers, identifiers for keyword matching
+   - `semantic_search_terms`: Concepts for vector similarity search
+2. **Hybrid Search**:
+   - Exact terms matched against document `keywords` array (boosted to 95%)
+   - Semantic terms embedded and searched via vector similarity
 3. **Vector Search**: Firestore `find_nearest()` with DOT_PRODUCT finds documents with similar embeddings
-4. **Relevance Scoring**: Results include similarity score (higher = more similar) converted to % relevance
+4. **Relevance Scoring**: Results ranked by best score (exact match or semantic similarity)
+
+### Debug Mode
+
+Toggle **Debug Mode** in the search UI to run multiple search permutations and see individual scores:
+
+| Permutation | Description |
+|-------------|-------------|
+| Exact Match | Keyword match for each extracted exact term (95% if found) |
+| Semantic Terms | Individual vector search for each semantic term |
+| Full Query | Vector search using the complete user query |
+
+Debug mode helps with:
+- Understanding why results ranked differently
+- Comparing exact vs semantic match effectiveness
+- Tuning queries for better results
+
+**Note**: Debug mode increases latency (multiple embedding generations + searches). Use for development/tuning only.
 
 ### Search Response
 
@@ -172,12 +195,15 @@ All functions are HTTP-callable (triggers don't work with non-default Firestore 
     "fileName": "ACS37630-Datasheet.pdf",
     "summary": "Hall-effect sensor for current sensing...",
     "keywords": ["current sensor", "hall effect", ...],
-    "rawDistance": 0.319,
-    "weightedScore": 0.84
+    "rawSimilarity": 0.45,
+    "weightedScore": 0.40,
+    "matchType": "semantic"
   }],
   "classification": {
     "primary_collection": "products_and_datasheets",
     "primary_confidence": 0.9,
+    "exact_match_terms": [],
+    "semantic_search_terms": ["current sensor", "hall effect"],
     "reasoning": "Query relates to product specifications..."
   },
   "searchMetadata": {
@@ -185,6 +211,35 @@ All functions are HTTP-callable (triggers don't work with non-default Firestore 
     "totalCandidates": 2,
     "searchTimeMs": 1059
   }
+}
+```
+
+### Search Response (Debug Mode)
+
+When `debugMode: true`, results include `scoreBreakdown`:
+
+```json
+{
+  "results": [{
+    "documentId": "abc123",
+    "fileName": "AHV85003-043-Datasheet.pdf",
+    "matchType": "exact",
+    "weightedScore": 0.95,
+    "scoreBreakdown": {
+      "exactMatches": [
+        { "term": "AHV85003", "matched": true }
+      ],
+      "semanticScores": [
+        { "term": "SiC driver", "similarity": 0.56, "score": 0.62 },
+        { "term": "gate driver", "similarity": 0.54, "score": 0.58 }
+      ],
+      "fullQueryScore": {
+        "query": "AHV85003 SiC driver",
+        "similarity": 0.58,
+        "score": 0.66
+      }
+    }
+  }]
 }
 ```
 

@@ -309,6 +309,19 @@ This happens asynchronously after the original write returns.
 3. **Use threshold filtering** to reduce processing
 4. **Cache frequent queries** if needed
 
+### Debug Mode Performance
+
+Debug mode runs multiple search permutations, significantly increasing latency:
+
+| Operation | Normal Mode | Debug Mode |
+|-----------|-------------|------------|
+| Embedding generations | 1 | 1 + N (N = semantic terms) |
+| Vector searches | 1 | 1 + N |
+| Keyword queries | 0-1 | 0-M (M = exact terms) |
+| **Typical total** | ~500ms | ~2-4 seconds |
+
+Debug mode is designed for development and tuning, not production use. The UI shows a warning when debug mode is enabled but the backend hasn't been deployed with the feature.
+
 ---
 
 ## Scaling Considerations
