@@ -103,6 +103,33 @@ export interface ClassificationResult {
   semantic_search_terms: string[];  // Terms for semantic/concept matching
 }
 
+// =============================================================================
+// Score Breakdown Types (Debug Mode)
+// =============================================================================
+
+export interface ExactMatchScore {
+  term: string;
+  matched: boolean;
+}
+
+export interface SemanticScore {
+  term: string;
+  similarity: number | null;
+  score: number;
+}
+
+export interface FullQueryScore {
+  query: string;
+  similarity: number | null;
+  score: number;
+}
+
+export interface ScoreBreakdown {
+  exactMatches: ExactMatchScore[];
+  semanticScores: SemanticScore[];
+  fullQueryScore: FullQueryScore | null;
+}
+
 export interface SearchResult {
   documentId: string;
   collectionId: string;
@@ -113,6 +140,7 @@ export interface SearchResult {
   keywords: string[];
   fileName: string;
   storagePath: string;
+  scoreBreakdown?: ScoreBreakdown;  // Present when debugMode is enabled
 }
 
 export interface SearchResponse {

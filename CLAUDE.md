@@ -56,6 +56,8 @@ cd admin_site/functions
 firebase deploy --only functions              # Deploy all functions
 ```
 
+**IMPORTANT:** Always deploy Cloud Functions after modifying `admin_site/functions/main.py`. The admin site calls these functions via HTTP, so changes won't take effect until deployed.
+
 ### Vector Index Creation
 ```bash
 gcloud firestore indexes composite create \

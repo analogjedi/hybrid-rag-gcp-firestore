@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Brain, Database, Sparkles, SlidersHorizontal, Cpu, Zap } from "lucide-react";
+import { Search, Brain, Database, Sparkles, SlidersHorizontal, Cpu, Zap, Bug } from "lucide-react";
 import type { SearchResponse, ClassificationResult, SearchResult } from "@/types";
 
 export default function SearchPage() {
@@ -38,14 +38,18 @@ export default function SearchPage() {
   const [lastSearchQuery, setLastSearchQuery] = useState("");
 
   // Model and thinking controls
-  const [model, setModel] = useState<"gemini-3-pro-preview" | "gemini-3-flash-preview">("gemini-3-pro-preview");
+  const [model, setModel] = useState<"gemini-3-pro-preview" | "gemini-3-flash-preview">("gemini-3-flash-preview");
   const [thinkingLevel, setThinkingLevel] = useState<"LOW" | "HIGH">("LOW");
+
+  // Debug mode for multi-permutation search
+  const [debugMode, setDebugMode] = useState(false);
 
   const performSearch = useCallback(async (
     searchQuery: string,
     searchThreshold: number,
     searchModel: string,
-    searchThinkingLevel: string
+    searchThinkingLevel: string,
+    searchDebugMode: boolean
   ) => {
     setIsSearching(true);
     setError(null);
@@ -62,6 +66,7 @@ export default function SearchPage() {
           threshold: searchThreshold,
           model: searchModel,
           thinkingLevel: searchThinkingLevel,
+          debugMode: searchDebugMode,
         }),
       });
 
@@ -86,7 +91,7 @@ export default function SearchPage() {
 
   const handleSearch = async (searchQuery: string) => {
     const effectiveThreshold = showAll ? -1 : threshold;
-    await performSearch(searchQuery, effectiveThreshold, model, thinkingLevel);
+    await performSearch(searchQuery, effectiveThreshold, model, thinkingLevel, debugMode);
   };
 
   const handleThresholdChange = (value: number[]) => {
@@ -98,7 +103,7 @@ export default function SearchPage() {
     // Trigger search when user finishes dragging
     const newThreshold = value[0];
     if (lastSearchQuery && !showAll) {
-      await performSearch(lastSearchQuery, newThreshold, model, thinkingLevel);
+      await performSearch(lastSearchQuery, newThreshold, model, thinkingLevel, debugMode);
     }
   };
 
@@ -106,7 +111,7 @@ export default function SearchPage() {
     setShowAll(checked);
     // Re-search if we have an active query
     if (lastSearchQuery) {
-      await performSearch(lastSearchQuery, checked ? -1 : threshold, model, thinkingLevel);
+      await performSearch(lastSearchQuery, checked ? -1 : threshold, model, thinkingLevel, debugMode);
     }
   };
 
@@ -115,7 +120,7 @@ export default function SearchPage() {
     // Re-search if we have an active query
     if (lastSearchQuery) {
       const effectiveThreshold = showAll ? -1 : threshold;
-      await performSearch(lastSearchQuery, effectiveThreshold, value, thinkingLevel);
+      await performSearch(lastSearchQuery, effectiveThreshold, value, thinkingLevel, debugMode);
     }
   };
 
@@ -124,7 +129,16 @@ export default function SearchPage() {
     // Re-search if we have an active query
     if (lastSearchQuery) {
       const effectiveThreshold = showAll ? -1 : threshold;
-      await performSearch(lastSearchQuery, effectiveThreshold, model, value);
+      await performSearch(lastSearchQuery, effectiveThreshold, model, value, debugMode);
+    }
+  };
+
+  const handleDebugModeChange = async (checked: boolean) => {
+    setDebugMode(checked);
+    // Re-search if we have an active query
+    if (lastSearchQuery) {
+      const effectiveThreshold = showAll ? -1 : threshold;
+      await performSearch(lastSearchQuery, effectiveThreshold, model, thinkingLevel, checked);
     }
   };
 
@@ -187,12 +201,25 @@ export default function SearchPage() {
                   Show All
                 </Label>
               </div>
+
+              {/* Debug Mode Toggle */}
+              <div className={`flex items-center gap-2 border-l pl-6 rounded-md px-3 py-1 transition-colors ${debugMode ? "bg-amber-500/20 border-amber-500/50" : ""}`}>
+                <Switch
+                  id="debug-mode"
+                  checked={debugMode}
+                  onCheckedChange={handleDebugModeChange}
+                />
+                <Label htmlFor="debug-mode" className={`text-sm cursor-pointer whitespace-nowrap ${debugMode ? "text-amber-500 font-medium" : ""}`}>
+                  Debug Mode
+                </Label>
+                <Bug className={`h-4 w-4 ${debugMode ? "text-amber-500" : "text-muted-foreground"}`} />
+              </div>
             </div>
 
             {/* Row 2: Threshold Slider - separate row for better interaction */}
-            <div className="flex items-center gap-4 pt-2 border-t">
+            <div className={`flex items-center gap-4 pt-2 border-t ${showAll ? "opacity-50" : ""}`}>
               <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium">Similarity Threshold</span>
+              <span className={`text-sm font-medium ${showAll ? "text-muted-foreground" : ""}`}>Similarity Threshold</span>
               <span className="text-xs text-muted-foreground">0%</span>
               <Slider
                 value={[threshold]}
@@ -236,7 +263,7 @@ export default function SearchPage() {
                   <span>{searchMetadata.searchTimeMs}ms</span>
                 </div>
               )}
-              <SearchResults results={results} query={query} />
+              <SearchResults results={results} query={query} debugMode={debugMode} />
             </div>
 
             {/* Classification Panel */}

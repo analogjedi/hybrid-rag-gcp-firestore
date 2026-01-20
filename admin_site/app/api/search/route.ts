@@ -17,6 +17,7 @@ export async function POST(request: NextRequest) {
       threshold = 0.25,
       model = "gemini-3-pro-preview",
       thinkingLevel = "LOW",
+      debugMode = false,
     } = body;
 
     if (!query || typeof query !== "string") {
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Call the Cloud Function which handles classification AND vector search
-    const result = await classifyAndSearch(query, limit, threshold, model, thinkingLevel);
+    const result = await classifyAndSearch(query, limit, threshold, model, thinkingLevel, debugMode);
 
     const response: SearchResponse = {
       results: result.results,

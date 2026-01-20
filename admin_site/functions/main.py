@@ -553,6 +553,7 @@ def classify_and_search(req: https_fn.CallableRequest) -> dict[str, Any]:
     - threshold: Min similarity threshold for DOT_PRODUCT (default 0.3)
     - model: Gemini model to use for classification (default: gemini-2.5-pro-preview-05-06)
     - thinkingLevel: Thinking budget - "LOW" or "HIGH" (default: LOW)
+    - debugMode: Run multi-permutation search with score breakdown (default: False)
 
     Returns:
     - results: Merged search results
@@ -570,6 +571,8 @@ def classify_and_search(req: https_fn.CallableRequest) -> dict[str, Any]:
     # Model selection and thinking level
     model_name = req.data.get("model", "gemini-3-pro-preview")
     thinking_level = req.data.get("thinkingLevel", "LOW")
+    # Debug mode for multi-permutation search
+    debug_mode = req.data.get("debugMode", False)
 
     if not query:
         raise https_fn.HttpsError(
@@ -610,6 +613,7 @@ def classify_and_search(req: https_fn.CallableRequest) -> dict[str, Any]:
         threshold,
         exact_terms=exact_terms,
         semantic_terms=semantic_terms,
+        debug_mode=debug_mode,
     )
     results.extend(primary_results)
     collections_searched.append(classification["primary_collection"])
@@ -626,6 +630,7 @@ def classify_and_search(req: https_fn.CallableRequest) -> dict[str, Any]:
                 threshold,
                 exact_terms=exact_terms,
                 semantic_terms=semantic_terms,
+                debug_mode=debug_mode,
             )
             results.extend(secondary_results)
             collections_searched.append(secondary_id)
@@ -775,6 +780,7 @@ def search_collection(
     threshold: float,
     exact_terms: list[str] | None = None,
     semantic_terms: list[str] | None = None,
+    debug_mode: bool = False,
 ) -> list[dict[str, Any]]:
     """
     Search a single collection using hybrid keyword + vector similarity.
@@ -783,7 +789,17 @@ def search_collection(
     1. If exact_terms provided: Find documents with matching keywords (boosted score)
     2. Perform semantic vector search using semantic_terms or full query
     3. Merge results, avoiding duplicates, with exact matches ranked higher
+
+    Debug mode:
+    - Runs multiple search permutations (exact terms, each semantic term, full query)
+    - Returns scoreBreakdown with individual scores for each permutation
     """
+    if debug_mode:
+        return search_collection_debug(
+            db, collection_id, query, limit, threshold, exact_terms, semantic_terms
+        )
+
+    # Standard (fast) search mode
     docs_ref = db.collection(f"{collection_id}_documents")
     results = []
     seen_doc_ids = set()
@@ -875,6 +891,165 @@ def search_collection(
     results.sort(key=lambda x: x.get("weightedScore", 0), reverse=True)
 
     print(f"[DEBUG] Collection {collection_id}: Found {len(results)} results (exact: {sum(1 for r in results if r.get('matchType') == 'exact')}, semantic: {sum(1 for r in results if r.get('matchType') == 'semantic')})")
+    return results
+
+
+def search_collection_debug(
+    db,
+    collection_id: str,
+    query: str,
+    limit: int,
+    threshold: float,
+    exact_terms: list[str] | None = None,
+    semantic_terms: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Debug mode search: runs multiple permutations and tracks individual scores.
+
+    Returns results with scoreBreakdown containing:
+    - exactMatches: Which exact terms matched
+    - semanticScores: Individual score for each semantic term
+    - fullQueryScore: Score using the complete user query
+    """
+    docs_ref = db.collection(f"{collection_id}_documents")
+
+    # Track scores per document: doc_id -> { docData, scoreBreakdown }
+    doc_scores: dict[str, dict[str, Any]] = {}
+
+    def get_or_init_doc(doc_id: str, doc_data: dict[str, Any]) -> dict[str, Any]:
+        """Initialize or retrieve score tracking for a document."""
+        if doc_id not in doc_scores:
+            content = doc_data.get("content", {})
+            doc_scores[doc_id] = {
+                "docData": {
+                    "documentId": doc_id,
+                    "collectionId": collection_id,
+                    "summary": content.get("summary", ""),
+                    "keywords": content.get("keywords", []),
+                    "fileName": doc_data.get("fileName", ""),
+                    "storagePath": doc_data.get("storagePath", ""),
+                },
+                "scoreBreakdown": {
+                    "exactMatches": [],
+                    "semanticScores": [],
+                    "fullQueryScore": None,
+                },
+            }
+        return doc_scores[doc_id]
+
+    print(f"[DEBUG-MODE] Starting multi-permutation search for collection {collection_id}")
+
+    # Phase 1: Check exact keyword matches for each term
+    if exact_terms:
+        print(f"[DEBUG-MODE] Checking exact terms: {exact_terms}")
+        for term in exact_terms:
+            keyword_query = docs_ref.where(
+                "content.keywords", "array_contains", term
+            ).limit(limit * 2)
+
+            for doc in keyword_query.get():
+                doc_data = doc.to_dict()
+                entry = get_or_init_doc(doc.id, doc_data)
+                entry["scoreBreakdown"]["exactMatches"].append({
+                    "term": term,
+                    "matched": True,
+                })
+                print(f"[DEBUG-MODE] Exact match: {doc.id} for term '{term}'")
+
+    # Phase 2: Run semantic search for EACH semantic term individually
+    if semantic_terms:
+        print(f"[DEBUG-MODE] Running individual semantic searches for: {semantic_terms}")
+        for term in semantic_terms:
+            term_vector = generate_embedding(term, task_type="RETRIEVAL_QUERY")
+            term_results = docs_ref.find_nearest(
+                vector_field="contentEmbedding.vector",
+                query_vector=Vector(term_vector),
+                distance_measure=DistanceMeasure.DOT_PRODUCT,
+                limit=limit * 2,
+                distance_result_field="vector_distance",
+            ).get()
+
+            for doc in term_results:
+                doc_data = doc.to_dict()
+                similarity = doc_data.get("vector_distance")
+                entry = get_or_init_doc(doc.id, doc_data)
+                entry["scoreBreakdown"]["semanticScores"].append({
+                    "term": term,
+                    "similarity": similarity,
+                    "score": calculate_relevance_score(similarity),
+                })
+            print(f"[DEBUG-MODE] Semantic search for '{term}' found {len(term_results)} results")
+
+    # Phase 3: Run semantic search with FULL query
+    print(f"[DEBUG-MODE] Running full query search: '{query}'")
+    full_query_vector = generate_embedding(query, task_type="RETRIEVAL_QUERY")
+    full_results = docs_ref.find_nearest(
+        vector_field="contentEmbedding.vector",
+        query_vector=Vector(full_query_vector),
+        distance_measure=DistanceMeasure.DOT_PRODUCT,
+        limit=limit * 2,
+        distance_result_field="vector_distance",
+    ).get()
+
+    for doc in full_results:
+        doc_data = doc.to_dict()
+        similarity = doc_data.get("vector_distance")
+        entry = get_or_init_doc(doc.id, doc_data)
+        entry["scoreBreakdown"]["fullQueryScore"] = {
+            "query": query,
+            "similarity": similarity,
+            "score": calculate_relevance_score(similarity),
+        }
+    print(f"[DEBUG-MODE] Full query search found {len(full_results)} results")
+
+    # Phase 4: Calculate combined score and build results
+    results = []
+    for doc_id, entry in doc_scores.items():
+        breakdown = entry["scoreBreakdown"]
+        doc_data = entry["docData"]
+
+        # Calculate best score from all methods
+        best_score = 0.0
+        match_type = "semantic"
+
+        # Check exact matches (boosted to 0.95)
+        if breakdown["exactMatches"]:
+            best_score = 0.95
+            match_type = "exact"
+
+        # Check semantic term scores
+        for sem_score in breakdown["semanticScores"]:
+            if sem_score["score"] > best_score:
+                best_score = sem_score["score"]
+
+        # Check full query score
+        full_query = breakdown.get("fullQueryScore")
+        if full_query and full_query.get("score", 0) > best_score:
+            best_score = full_query["score"]
+
+        # Get raw similarity from full query (for backwards compat)
+        raw_similarity = full_query.get("similarity") if full_query else None
+
+        # Apply threshold filtering (skip exact matches from filtering)
+        if best_score < threshold and match_type != "exact":
+            print(f"[DEBUG-MODE] Filtered out {doc_id} - best score {best_score:.3f} below threshold {threshold}")
+            continue
+
+        results.append({
+            **doc_data,
+            "rawSimilarity": raw_similarity,
+            "weightedScore": best_score,
+            "matchType": match_type,
+            "scoreBreakdown": breakdown,
+        })
+
+    # Sort by weightedScore descending
+    results.sort(key=lambda x: x.get("weightedScore", 0), reverse=True)
+
+    # Limit results
+    results = results[:limit]
+
+    print(f"[DEBUG-MODE] Collection {collection_id}: Returning {len(results)} results")
     return results
 
 

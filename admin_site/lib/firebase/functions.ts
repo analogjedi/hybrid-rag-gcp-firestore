@@ -120,18 +120,24 @@ export async function classifyAndSearch(
   limit: number = 10,
   threshold: number = 0.25,
   model: string = "gemini-3-pro-preview",
-  thinkingLevel: string = "LOW"
+  thinkingLevel: string = "LOW",
+  debugMode: boolean = false
 ): Promise<{
   results: Array<{
     documentId: string;
     collectionId: string;
-    rawDistance: number | null;
+    rawSimilarity: number | null;
     weightedScore: number;
     matchType: "exact" | "semantic";
     summary: string;
     keywords: string[];
     fileName: string;
     storagePath: string;
+    scoreBreakdown?: {
+      exactMatches: Array<{ term: string; matched: boolean }>;
+      semanticScores: Array<{ term: string; similarity: number | null; score: number }>;
+      fullQueryScore: { query: string; similarity: number | null; score: number } | null;
+    };
   }>;
   classification: {
     primary_collection: string;
@@ -139,7 +145,7 @@ export async function classifyAndSearch(
     secondary_collections: string[];
     secondary_confidence: number;
     reasoning: string;
-    search_strategy: string;
+    search_strategy: "primary_only" | "primary_then_secondary" | "parallel";
     exact_match_terms: string[];
     semantic_search_terms: string[];
   };
@@ -149,7 +155,7 @@ export async function classifyAndSearch(
     searchTimeMs: number;
   };
 }> {
-  return callFunction("classify_and_search", { query, limit, threshold, model, thinkingLevel });
+  return callFunction("classify_and_search", { query, limit, threshold, model, thinkingLevel, debugMode });
 }
 
 /**
