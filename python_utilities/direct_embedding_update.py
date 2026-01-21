@@ -53,18 +53,44 @@ def get_all_collection_ids() -> list[str]:
 
 
 def build_embedding_text(content: dict) -> str:
-    """Build embedding text from all content fields except contentUpdatedAt."""
+    """
+    Build embedding text from all content fields except contentUpdatedAt.
+
+    Handles different field types:
+    - Strings: included as-is
+    - Arrays: joined with commas
+    - Chapters: formatted as "Document Sections:" block
+    - Other types: converted to string
+
+    Returns formatted text suitable for embedding generation.
+    """
     if not content:
         return ""
 
-    excluded_fields = {"contentUpdatedAt"}
+    # Fields to exclude from embedding (handled separately or not needed)
+    excluded_fields = {"contentUpdatedAt", "chapters"}
     parts = []
 
-    # Add summary first if it exists
+    # 1. Add summary first if it exists (most important for context)
     if "summary" in content and content["summary"]:
         parts.append(content["summary"])
 
-    # Add all other fields
+    # 2. Process chapter summaries (adds section-level detail to embedding)
+    chapters = content.get("chapters", [])
+    if chapters:
+        chapter_texts = []
+        # Sort by order to maintain document structure
+        for chapter in sorted(chapters, key=lambda c: c.get("order", 0)):
+            title = chapter.get("title", "")
+            summary = chapter.get("summary", "")
+            if title and summary:
+                chapter_texts.append(f"{title}: {summary}")
+            elif summary:
+                chapter_texts.append(summary)
+        if chapter_texts:
+            parts.append("Document Sections:\n" + "\n".join(chapter_texts))
+
+    # 3. Add all other fields
     for key, value in content.items():
         if key in excluded_fields or key == "summary":
             continue

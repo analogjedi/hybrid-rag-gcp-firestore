@@ -253,10 +253,33 @@ def build_extraction_prompt(schema: dict[str, Any]) -> str:
             field_desc += f"\n  Allowed values: {', '.join(field['enum'])}"
         field_descriptions.append(field_desc)
 
+    # Add chapters field for document structure extraction
+    chapter_instruction = """- chapters (array): Identify the document's structure and extract chapter/section summaries.
+  For each chapter or major section, return an object with:
+  {
+    "title": "Chapter or section title",
+    "summary": "2-3 sentence summary of this section's content",
+    "pageStart": null,
+    "pageEnd": null,
+    "level": 1,
+    "order": 0
+  }
+
+  Guidelines for chapters:
+  - Look for numbered chapters, titled sections, or clear topic divisions
+  - For short documents (< 5 pages) without clear chapters, return []
+  - For datasheets, treat standard sections (Features, Specs, Applications, etc.) as chapters
+  - Maximum 20 chapters/sections
+  - Use null for page numbers if not determinable
+  - level: 1=chapter, 2=section within a chapter
+  - order: Sequential position starting from 0"""
+
     prompt = f"""Analyze this PDF document and extract the following metadata.
 Return a JSON object with these fields:
 
 {chr(10).join(field_descriptions)}
+
+{chapter_instruction}
 
 Guidelines:
 - Read the entire document including any images, diagrams, or tables
@@ -297,7 +320,24 @@ def analyze_document_with_gemini(storage_path: str, prompt: str) -> dict[str, An
         # Remove first and last lines (```json and ```)
         response_text = "\n".join(lines[1:-1])
 
-    return json.loads(response_text)
+    metadata = json.loads(response_text)
+
+    # Normalize chapters field
+    if "chapters" not in metadata or metadata["chapters"] is None:
+        metadata["chapters"] = []
+
+    # Ensure each chapter has required fields with defaults
+    for i, chapter in enumerate(metadata.get("chapters", [])):
+        if "order" not in chapter:
+            chapter["order"] = i
+        if "title" not in chapter:
+            chapter["title"] = f"Section {i + 1}"
+        if "summary" not in chapter:
+            chapter["summary"] = ""
+        if "level" not in chapter:
+            chapter["level"] = 1
+
+    return metadata
 
 
 # =============================================================================
@@ -474,6 +514,7 @@ def build_embedding_text(content: dict[str, Any]) -> str:
     Handles different field types:
     - Strings: included as-is
     - Arrays: joined with commas
+    - Chapters: formatted as "Document Sections:" block
     - Other types: converted to string
 
     Returns formatted text suitable for embedding generation.
@@ -481,17 +522,32 @@ def build_embedding_text(content: dict[str, Any]) -> str:
     if not content:
         return ""
 
-    # Fields to exclude from embedding
-    excluded_fields = {"contentUpdatedAt"}
+    # Fields to exclude from embedding (handled separately or not needed)
+    excluded_fields = {"contentUpdatedAt", "chapters"}
 
     # Build text parts
     parts = []
 
-    # Process summary first if it exists (most important for context)
+    # 1. Process summary first if it exists (most important for context)
     if "summary" in content and content["summary"]:
         parts.append(content["summary"])
 
-    # Process all other fields
+    # 2. Process chapter summaries (adds section-level detail to embedding)
+    chapters = content.get("chapters", [])
+    if chapters:
+        chapter_texts = []
+        # Sort by order to maintain document structure
+        for chapter in sorted(chapters, key=lambda c: c.get("order", 0)):
+            title = chapter.get("title", "")
+            summary = chapter.get("summary", "")
+            if title and summary:
+                chapter_texts.append(f"{title}: {summary}")
+            elif summary:
+                chapter_texts.append(summary)
+        if chapter_texts:
+            parts.append("Document Sections:\n" + "\n".join(chapter_texts))
+
+    # 3. Process all other fields
     for key, value in content.items():
         if key in excluded_fields or key == "summary":
             continue

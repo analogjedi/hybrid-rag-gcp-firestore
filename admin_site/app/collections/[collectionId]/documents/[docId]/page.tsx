@@ -130,6 +130,48 @@ export default async function DocumentDetailPage({ params }: PageProps) {
               </CardContent>
             </Card>
 
+            {/* Document Structure (Chapters) */}
+            {document.content?.chapters?.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Document Structure</CardTitle>
+                  <CardDescription>
+                    Chapter and section summaries extracted from the document
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {[...document.content.chapters]
+                      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                      .map((chapter, idx) => (
+                        <div
+                          key={idx}
+                          className={`border-l-2 pl-4 ${
+                            chapter.level === 2 ? "ml-4 border-muted" : "border-primary"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-medium text-sm">{chapter.title}</h4>
+                            {chapter.pageStart && (
+                              <span className="text-xs text-muted-foreground">
+                                {chapter.pageEnd && chapter.pageEnd !== chapter.pageStart
+                                  ? `pp. ${chapter.pageStart}-${chapter.pageEnd}`
+                                  : `p. ${chapter.pageStart}`}
+                              </span>
+                            )}
+                          </div>
+                          {chapter.summary && (
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {chapter.summary}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Extracted Metadata */}
             {document.content && Object.keys(document.content).length > 2 && (
               <Card>
@@ -144,7 +186,7 @@ export default async function DocumentDetailPage({ params }: PageProps) {
                     {Object.entries(document.content)
                       .filter(
                         ([key]) =>
-                          !["summary", "keywords", "contentUpdatedAt"].includes(key)
+                          !["summary", "keywords", "contentUpdatedAt", "chapters"].includes(key)
                       )
                       .map(([key, value]) => (
                         <div key={key} className="space-y-1">

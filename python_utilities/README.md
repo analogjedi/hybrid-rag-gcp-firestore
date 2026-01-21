@@ -18,6 +18,7 @@ firestore_embeddings_reference/
 **Required IAM Roles for the service account:**
 - `roles/datastore.user` - Firestore read/write access
 - `roles/aiplatform.user` - Vertex AI embedding generation
+- `roles/storage.objectAdmin` - Cloud Storage read/write/delete (for `clear_all_documents.py`)
 
 To download credentials:
 1. Go to [Google Cloud Console](https://console.cloud.google.com/iam-admin/serviceaccounts)
@@ -153,6 +154,48 @@ python regenerate_embeddings.py --collection products_and_datasheets
 ```
 
 **Note:** This utility requires Cloud Function invoker permissions. For simpler local execution, use `direct_embedding_update.py` instead.
+
+### clear_all_documents.py
+
+Deletes all documents from Firestore collections AND their associated PDF files from Cloud Storage. Collection schemas are preserved. Use this when you want to start fresh with new test documents.
+
+```bash
+# Dry run (shows what would be deleted, no changes made)
+python clear_all_documents.py
+
+# Actually delete documents and storage files
+python clear_all_documents.py --execute
+
+# Clear only a specific collection
+python clear_all_documents.py --execute --collection products_and_datasheets
+```
+
+**Output:**
+```
+============================================================
+Clear All Documents Utility
+============================================================
+Project: analog-fusion-knowledge-system
+Database: test
+Storage Bucket: analog-fusion-knowledge-system-documents
+Mode: EXECUTE (will delete!)
+
+Collection: products_and_datasheets
+--------------------------------------------------
+  - Gkozir98eMUXxaZWKJ6a
+    Storage: documents/products_and_datasheets/1768763922867_ACS37630-Datasheet.pdf
+    [DELETED] Storage file
+    [DELETED] Firestore document
+...
+```
+
+**What gets deleted:**
+- All documents in `{collectionId}_documents` Firestore collections
+- Associated PDF files in Cloud Storage (`documents/{collectionId}/...`)
+
+**What is preserved:**
+- Collection schemas in `_system/config/schemas`
+- Vector indexes (no need to recreate)
 
 ## Workflow: Upgrading Embeddings
 
