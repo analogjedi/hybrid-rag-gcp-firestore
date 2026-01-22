@@ -131,7 +131,7 @@ export default async function DocumentDetailPage({ params }: PageProps) {
             </Card>
 
             {/* Document Structure (Chapters) */}
-            {document.content?.chapters?.length > 0 && (
+            {(document.content?.chapters?.length ?? 0) > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle>Document Structure</CardTitle>
@@ -141,7 +141,7 @@ export default async function DocumentDetailPage({ params }: PageProps) {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {[...document.content.chapters]
+                    {[...(document.content?.chapters ?? [])]
                       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
                       .map((chapter, idx) => (
                         <div

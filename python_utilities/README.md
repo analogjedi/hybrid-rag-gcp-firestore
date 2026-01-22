@@ -193,6 +193,8 @@ Collection: products_and_datasheets
 - All documents in `{collectionId}_documents` Firestore collections
 - Associated PDF files in Cloud Storage (`documents/{collectionId}/...`)
 
+**Note:** Element subcollections (`{collectionId}_documents/{docId}/elements/`) are **not** automatically deleted when parent documents are deleted (Firestore doesn't cascade delete subcollections). However, orphaned elements won't affect functionality and will be replaced when documents are re-uploaded.
+
 **What is preserved:**
 - Collection schemas in `_system/config/schemas`
 - Vector indexes (no need to recreate)

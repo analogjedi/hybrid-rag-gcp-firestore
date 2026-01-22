@@ -9,19 +9,64 @@ This document provides technical details on implementing vector embeddings in Fi
 Documents that need semantic search should include a `content` field (or similar) that contains the text to be embedded, plus a `contentEmbedding` field that stores the vector:
 
 ```
-{collection}/{documentId}
+{collection}_documents/{documentId}
 ├── content: {
 │   ├── summary: "7nm FinFET process flow with stress engineering"
-│   ├── details: "This document describes the complete..."
+│   ├── keywords: ["FinFET", "stress engineering", ...]
+│   ├── chapters: [{title, summary, pageStart, pageEnd, level, order}, ...]
+│   ├── tables: [{id, title, description, columnHeaders, rowCount, dataPreview}, ...]
+│   ├── figures: [{id, title, description, figureType, visualElements, dataInsights}, ...]
+│   ├── images: [{id, title, description, imageType, subjects, context}, ...]
+│   ├── elementCounts: {tables: 3, figures: 5, images: 2}
 │   ├── contentUpdatedAt: "2026-01-03T14:30:00Z"
-│   └── ...other fields
+│   └── ...other schema fields
 │   }
 └── contentEmbedding: {
-    ├── vector: Vector([0.123, -0.456, ...])  ← 2048 floats
+    ├── vector: Vector([0.123, -0.456, ...])  ← 2048 floats (includes element summaries)
     ├── embeddedAt: "2026-01-03T14:30:05Z"
     └── modelVersion: "gemini-embedding-001"
     }
 ```
+
+### Element Subcollection Structure
+
+Each extracted table, figure, or image gets its own document in an `elements` subcollection with an independent embedding for granular search:
+
+```
+{collection}_documents/{documentId}/elements/{elementId}
+├── parentDocumentId: "abc123"
+├── collectionId: "products_and_datasheets"
+├── elementType: "table" | "figure" | "image"
+├── element: {
+│   ├── id: "table_1"
+│   ├── type: "table"
+│   ├── title: "Electrical Specifications"
+│   ├── description: "Operating voltage and current limits"
+│   ├── pageNumber: 5
+│   ├── order: 0
+│   ├── columnHeaders: ["Parameter", "Min", "Typ", "Max", "Unit"]
+│   ├── rowCount: 12
+│   └── dataPreview: "VCC | 4.5 | 5.0 | 5.5 | V; ICC | - | 10 | 15 | mA"
+│   }
+├── parentFileName: "ACS37630-Datasheet.pdf"
+├── parentStoragePath: "gs://bucket/documents/..."
+├── contentEmbedding: {
+│   ├── vector: Vector([...])  ← Independent 2048-dim embedding
+│   ├── embeddedAt: "2026-01-03T14:30:10Z"
+│   └── modelVersion: "gemini-embedding-001"
+│   }
+├── status: "pending" | "ready" | "error"
+└── createdAt: "2026-01-03T14:30:00Z"
+```
+
+### Why Hybrid Architecture?
+
+The hybrid approach (summaries in parent + independent element embeddings) enables:
+
+1. **Document-level search**: Parent embedding includes element summaries, so searching for "voltage specifications" finds documents with relevant tables
+2. **Element-level search**: Independent embeddings allow finding specific tables/figures across all documents
+3. **Grounded answers**: Element citations can reference specific tables/figures with page numbers
+4. **Flexible retrieval**: Return whole documents or specific elements based on query intent
 
 ### ContentEmbedding Interface
 
@@ -37,6 +82,46 @@ interface ContentEmbedding {
 
 - **embeddedAt**: Enables infinite loop prevention (if `embeddedAt >= contentUpdatedAt`, skip)
 - **modelVersion**: Tracks which model generated the embedding (useful for migrations)
+
+---
+
+## Element Extraction
+
+### Extracted Element Types
+
+| Type | Fields | Use Case |
+|------|--------|----------|
+| **Table** | title, description, columnHeaders, rowCount, dataPreview | Specifications, comparisons, data tables |
+| **Figure** | title, description, figureType, visualElements, dataInsights | Charts, diagrams, schematics, graphs |
+| **Image** | title, description, imageType, subjects, context | Photos, screenshots, illustrations |
+
+### Element Embedding Text
+
+Element embeddings are generated from structured fields:
+
+**Table**: `{title}\n{description}\nColumns: {columnHeaders}\nData: {dataPreview}`
+
+**Figure**: `{title}\n{description}\nType: {figureType}\nVisual elements: {visualElements}\nInsights: {dataInsights}`
+
+**Image**: `{title}\n{description}\nType: {imageType}\nSubjects: {subjects}\nContext: {context}`
+
+### Element Search
+
+Elements are searched using a **collection group query** that spans all `elements` subcollections:
+
+```python
+db.collection_group("elements")
+  .where("collectionId", "==", collection_id)
+  .where("status", "==", "ready")
+  .find_nearest(
+      vector_field="contentEmbedding.vector",
+      query_vector=query_embedding,
+      distance_measure=DistanceMeasure.DOT_PRODUCT,
+      limit=limit
+  )
+```
+
+Element results are merged with document results and sorted by `weightedScore`.
 
 ---
 

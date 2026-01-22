@@ -18,15 +18,18 @@ Traditional RAG fails with multimodal documents:
 This system instead:
 1. **Gemini analyzes the full document** (PDF, audio, video) including all visual content
 2. **Extracts structured metadata**: summary, chapter summaries, keywords, schema fields
-3. **Embeds the metadata** (not chunks) for semantic search
-4. **Returns full documents** to the LLM for grounded answers
+3. **Extracts visual elements**: tables, figures, and images as separate searchable entities
+4. **Embeds the metadata** (not chunks) for semantic search
+5. **Creates element subcollections** with independent embeddings for granular search
+6. **Returns full documents** to the LLM for grounded answers
 
 ### Agentic Retrieval Pipeline
 
 ```
 Query → AI Classifier → Collection Selection
      → Hybrid Search (keyword + semantic) on metadata
-     → AI Reranker → Select best documents
+     → Element Search (parallel) on tables/figures/images
+     → AI Reranker → Select best documents + elements
      → Full Document(s) + Query → LLM → Grounded Answer
 ```
 
@@ -44,9 +47,12 @@ The project has four main components:
 
 1. **Cloud Functions (Python)** - `admin_site/functions/`
    - `main.py`: All deployed Cloud Functions including:
-     - `process_document`: Gemini multimodal PDF analysis
+     - `process_document`: Gemini multimodal PDF analysis (extracts tables/figures/images)
      - `generate_document_embedding`: Single document embedding generation
-     - `classify_and_search`: Agentic query classification + vector search
+     - `generate_element_embeddings_for_document`: Element embeddings for subcollection
+     - `generate_all_element_embeddings`: Batch element embedding generation
+     - `classify_and_search`: Agentic query classification + vector search (includes elements)
+     - `generate_grounded_answer`: LLM response with element-aware citations
      - `backfill_embeddings`: Batch processing for existing documents
 
 2. **Admin Site (Next.js)** - `admin_site/`
@@ -91,6 +97,8 @@ firebase deploy --only functions              # Deploy all functions
 **IMPORTANT:** Always deploy Cloud Functions after modifying `admin_site/functions/main.py`. The admin site calls these functions via HTTP, so changes won't take effect until deployed.
 
 ### Vector Index Creation
+
+**Document Index** (per collection):
 ```bash
 gcloud firestore indexes composite create \
   --collection-group=YOUR_COLLECTION_documents \
@@ -100,23 +108,57 @@ gcloud firestore indexes composite create \
   --project=YOUR_PROJECT_ID
 ```
 
+**Element Index** (collection group for all elements):
+```bash
+gcloud firestore indexes composite create \
+  --collection-group=elements \
+  --query-scope=COLLECTION_GROUP \
+  --field-config='field-path=collectionId,order=ASCENDING' \
+  --field-config='field-path=status,order=ASCENDING' \
+  --field-config='field-path=contentEmbedding.vector,vector-config={"dimension":"2048","flat":"{}"}' \
+  --database=test \
+  --project=YOUR_PROJECT_ID
+```
+
 ## Document Data Model
 
-Documents follow this structure:
+### Parent Document Structure
 ```
-{collection}/{documentId}
+{collection}_documents/{documentId}
 ├── content: {
 │   ├── summary: string
-│   ├── details: string
 │   ├── keywords: string[]
+│   ├── chapters: ChapterMetadata[]
+│   ├── tables: ExtractedTable[]      # NEW: Table metadata
+│   ├── figures: ExtractedFigure[]    # NEW: Figure metadata
+│   ├── images: ExtractedImage[]      # NEW: Image metadata
+│   ├── elementCounts: { tables, figures, images }
 │   └── contentUpdatedAt: ISO timestamp
 │   }
 └── contentEmbedding: {
-    ├── vector: Vector(2048 floats)
+    ├── vector: Vector(2048 floats)   # Includes element summaries
     ├── embeddedAt: ISO timestamp
     └── modelVersion: "gemini-embedding-001"
     }
 ```
+
+### Element Subcollection Structure
+```
+{collection}_documents/{documentId}/elements/{elementId}
+├── parentDocumentId: string
+├── collectionId: string
+├── elementType: "table" | "figure" | "image"
+├── element: ExtractedTable | ExtractedFigure | ExtractedImage
+├── parentFileName: string           # Denormalized for display
+├── parentStoragePath: string        # Denormalized for grounding
+├── contentEmbedding: Vector(2048)   # Independent embedding
+└── status: "pending" | "ready"
+```
+
+### Element Types
+- **ExtractedTable**: title, description, columnHeaders, rowCount, dataPreview
+- **ExtractedFigure**: title, description, figureType (chart/diagram/graph/schematic), visualElements, dataInsights
+- **ExtractedImage**: title, description, imageType (photo/screenshot/logo/illustration), subjects, context
 
 ## Environment Configuration
 

@@ -1,10 +1,10 @@
 # Vector Index Setup
 
-Firestore requires a vector index to enable similarity searches. Without this index, `find_nearest()` queries will fail.
+Firestore requires vector indexes to enable similarity searches. Without these indexes, `find_nearest()` queries will fail.
 
-## Create the Vector Index
+## Create Document Vector Index
 
-Run this command to create the vector index:
+Each collection needs its own vector index for document search:
 
 ```bash
 gcloud firestore indexes composite create \
@@ -16,8 +16,29 @@ gcloud firestore indexes composite create \
 ```
 
 Replace:
-- `documents` with your collection name
+- `YOUR_COLLECTION_documents` with your collection name (e.g., `products_and_datasheets_documents`)
 - `YOUR_PROJECT_ID` with your Firebase project ID
+
+## Create Element Vector Index
+
+A single collection group index enables element search (tables, figures, images) across all documents:
+
+```bash
+gcloud firestore indexes composite create \
+  --collection-group=elements \
+  --query-scope=COLLECTION_GROUP \
+  --field-config='field-path=collectionId,order=ASCENDING' \
+  --field-config='field-path=status,order=ASCENDING' \
+  --field-config='field-path=contentEmbedding.vector,vector-config={"dimension":"2048","flat":"{}"}' \
+  --database=test \
+  --project=YOUR_PROJECT_ID
+```
+
+This index enables:
+- Searching across all `elements` subcollections
+- Filtering by `collectionId` (to scope to a specific document collection)
+- Filtering by `status` (only search "ready" elements)
+- Vector similarity search on element embeddings
 
 ## Index Parameters Explained
 
@@ -128,23 +149,27 @@ Possible causes:
 
 ## Multiple Collections
 
-If you have multiple collections with embeddings, create an index for each:
+If you have multiple collections with embeddings, create a document index for each:
 
 ```bash
 # Design specs collection
 gcloud firestore indexes composite create \
-  --collection-group=design_specs \
-  --query-scope=COLLECTION_GROUP \
+  --collection-group=design_specs_documents \
+  --query-scope=COLLECTION \
   --field-config=field-path=contentEmbedding.vector,vector-config='{"dimension":"2048","flat":"{}"}' \
+  --database=test \
   --project=YOUR_PROJECT_ID
 
 # Process docs collection
 gcloud firestore indexes composite create \
-  --collection-group=process_docs \
-  --query-scope=COLLECTION_GROUP \
+  --collection-group=process_docs_documents \
+  --query-scope=COLLECTION \
   --field-config=field-path=contentEmbedding.vector,vector-config='{"dimension":"2048","flat":"{}"}' \
+  --database=test \
   --project=YOUR_PROJECT_ID
 ```
+
+**Note:** The element index only needs to be created once—it uses `COLLECTION_GROUP` scope to search across all `elements` subcollections regardless of which parent collection they belong to.
 
 ## Subcollections
 

@@ -18,6 +18,7 @@ export async function POST(request: NextRequest) {
       model = "gemini-3-pro-preview",
       thinkingLevel = "LOW",
       debugMode = false,
+      enableRerank = true,
     } = body;
 
     if (!query || typeof query !== "string") {
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Call the Cloud Function which handles classification AND vector search
-    const result = await classifyAndSearch(query, limit, threshold, model, thinkingLevel, debugMode);
+    const result = await classifyAndSearch(query, limit, threshold, model, thinkingLevel, debugMode, enableRerank);
 
     const response: SearchResponse = {
       results: result.results,

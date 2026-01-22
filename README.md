@@ -19,10 +19,12 @@ Instead of chunking, this system:
 
 1. **Analyzes the full document** using Gemini's multimodal capabilities (sees text, images, tables, diagrams)
 2. **Extracts rich metadata**: summary, chapter summaries, keywords, and schema-defined fields
-3. **Embeds the metadata** (not the document chunks) for semantic search
-4. **Returns full documents** to the LLM for grounded answer generation
+3. **Extracts visual elements**: tables, figures, and images as separate searchable entities with their own metadata
+4. **Embeds the metadata** (not the document chunks) for semantic search
+5. **Creates element subcollections** with independent embeddings for element-level search
+6. **Returns full documents** to the LLM for grounded answer generation
 
-The LLM receives complete context—not fragments—enabling high-quality answers grounded in the actual source material.
+The LLM receives complete context—not fragments—enabling high-quality answers grounded in the actual source material. Element-level search allows finding specific tables, charts, or images within documents.
 
 ## Overview
 
@@ -47,13 +49,19 @@ PDF / Audio / Video (< 2-4MB inline, or Cloud Storage link)
          ├── summary: 2-3 sentence overview
          ├── chapters[]: section-by-section summaries
          ├── keywords[]: searchable terms
+         ├── tables[]: table metadata with columns & data preview
+         ├── figures[]: chart/diagram descriptions & insights
+         ├── images[]: photo/illustration subjects & context
          └── schema fields: product family, category, etc.
          │
          ▼
   Metadata Text → Embedding (gemini-embedding-001, 2048 dims)
          │
+         ├── Parent doc embedding (includes element summaries)
+         └── Element subcollection (independent embeddings)
+         │
          ▼
-  Stored in Firestore with Vector Index
+  Stored in Firestore with Vector Indexes
 ```
 
 ### Retrieval Pipeline (Agentic)
@@ -66,17 +74,24 @@ User Query + Conversation History
   └── Routes to relevant collection(s)
          │
          ▼
-  Hybrid Search
-  ├── Exact keyword matching (part numbers, SKUs)
-  └── Semantic similarity on metadata
+  Hybrid Search (parallel)
+  ├── Document Search
+  │   ├── Exact keyword matching (part numbers, SKUs)
+  │   └── Semantic similarity on metadata
+  └── Element Search (collection group query)
+      └── Semantic similarity on tables/figures/images
+         │
+         ▼
+  Merged & Sorted Results
+  └── Documents + Elements ranked by weightedScore
          │
          ▼
   AI Reranker (optional)
-  └── Reviews results, selects best documents
+  └── Reviews results, selects best documents/elements
          │
          ▼
   Full Document(s) + Query → LLM
-  └── Grounded answer with complete context
+  └── Grounded answer with element-aware citations
 ```
 
 ## Directory Structure
@@ -131,12 +146,25 @@ cd admin_site/functions
 firebase deploy --only functions
 ```
 
-### 3. Create Vector Index
+### 3. Create Vector Indexes
 
+**Document Index** (per collection):
 ```bash
 gcloud firestore indexes composite create \
   --collection-group=YOUR_COLLECTION_documents \
   --query-scope=COLLECTION \
+  --field-config='field-path=contentEmbedding.vector,vector-config={"dimension":"2048","flat":"{}"}' \
+  --database=test \
+  --project=YOUR_PROJECT_ID
+```
+
+**Element Index** (one-time, for all collections):
+```bash
+gcloud firestore indexes composite create \
+  --collection-group=elements \
+  --query-scope=COLLECTION_GROUP \
+  --field-config='field-path=collectionId,order=ASCENDING' \
+  --field-config='field-path=status,order=ASCENDING' \
   --field-config='field-path=contentEmbedding.vector,vector-config={"dimension":"2048","flat":"{}"}' \
   --database=test \
   --project=YOUR_PROJECT_ID

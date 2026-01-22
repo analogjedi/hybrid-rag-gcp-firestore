@@ -38,9 +38,11 @@ Enterprise document management with AI-powered semantic search using Firestore V
 
 1. **Upload**: PDF stored in Cloud Storage, document record created in Firestore (status: `pending`)
 2. **Process**: Click "Process" in UI to trigger Gemini multimodal analysis
-3. **Extract**: Metadata fields extracted based on collection schema (status: `metadata_ready`)
-4. **Embed**: Generate 2048-dim vector embedding via Cloud Function (status: `ready`)
-5. **Search**: Document now searchable via vector similarity with relevance scores
+3. **Extract**: Metadata fields extracted based on collection schema, plus tables/figures/images (status: `metadata_ready`)
+4. **Create Elements**: Element documents created in `{docId}/elements/` subcollection (status: `pending`)
+5. **Embed Document**: Generate 2048-dim vector embedding for parent document (status: `ready`)
+6. **Embed Elements**: Generate independent embeddings for each table/figure/image
+7. **Search**: Document and elements now searchable via vector similarity with relevance scores
 
 ## Pre-defined Collections
 
@@ -149,11 +151,14 @@ All functions are HTTP-callable (triggers don't work with non-default Firestore 
 
 | Function | Description |
 |----------|-------------|
-| `process_document` | Gemini PDF analysis for a single document |
+| `process_document` | Gemini PDF analysis (extracts tables/figures/images, creates element docs) |
 | `process_pending_documents` | Batch process all pending documents |
 | `generate_document_embedding` | Generate embedding for one document |
-| `generate_embeddings_for_ready_docs` | Batch generate embeddings |
-| `classify_and_search` | Agentic query routing + vector search |
+| `generate_embeddings_for_ready_docs` | Batch generate document embeddings |
+| `generate_element_embeddings_for_document` | Generate embeddings for elements in one document |
+| `generate_all_element_embeddings` | Batch generate element embeddings across collection |
+| `classify_and_search` | Agentic query routing + vector search (includes elements) |
+| `generate_grounded_answer` | LLM response with element-aware citations |
 | `get_all_collection_stats` | Dashboard statistics |
 | `backfill_embeddings` | Backfill missing embeddings |
 | `create_vector_index` | Auto-create vector index for new collections |
@@ -163,11 +168,16 @@ All functions are HTTP-callable (triggers don't work with non-default Firestore 
 1. **Query Classification**: Gemini analyzes the query and extracts:
    - `exact_match_terms`: Part numbers, identifiers for keyword matching
    - `semantic_search_terms`: Concepts for vector similarity search
-2. **Hybrid Search**:
-   - Exact terms matched against document `keywords` array (boosted to 95%)
-   - Semantic terms embedded and searched via vector similarity
-3. **Vector Search**: Firestore `find_nearest()` with DOT_PRODUCT finds documents with similar embeddings
-4. **Relevance Scoring**: Results ranked by best score (exact match or semantic similarity)
+2. **Hybrid Search** (parallel):
+   - **Document Search**:
+     - Exact terms matched against document `keywords` array (boosted to 95%)
+     - Semantic terms embedded and searched via vector similarity
+   - **Element Search** (collection group query):
+     - Semantic search on tables/figures/images across all documents
+     - Returns element results with `matchType: "element"`
+3. **Vector Search**: Firestore `find_nearest()` with DOT_PRODUCT finds documents/elements with similar embeddings
+4. **Merge & Rank**: Document and element results merged, sorted by `weightedScore`
+5. **Element Citations**: Search results include element-specific fields (elementId, elementType, elementTitle, pageNumber)
 
 ### Debug Mode
 

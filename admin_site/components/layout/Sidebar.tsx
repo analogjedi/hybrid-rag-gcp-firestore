@@ -10,6 +10,7 @@ import {
   Settings,
   FileText,
   Database,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
@@ -19,6 +20,7 @@ const navigation = [
   { name: "Dashboard", href: "/", icon: Home },
   { name: "Collections", href: "/collections", icon: FolderOpen },
   { name: "Search", href: "/search", icon: Search },
+  { name: "Chat", href: "/chat", icon: MessageSquare },
 ];
 
 export function Sidebar() {

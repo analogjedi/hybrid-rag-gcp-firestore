@@ -121,7 +121,8 @@ export async function classifyAndSearch(
   threshold: number = 0.25,
   model: string = "gemini-3-pro-preview",
   thinkingLevel: string = "LOW",
-  debugMode: boolean = false
+  debugMode: boolean = false,
+  enableRerank: boolean = true
 ): Promise<{
   results: Array<{
     documentId: string;
@@ -138,6 +139,9 @@ export async function classifyAndSearch(
       semanticScores: Array<{ term: string; similarity: number | null; score: number }>;
       fullQueryScore: { query: string; similarity: number | null; score: number } | null;
     };
+    rerankPosition?: number;
+    originalPosition?: number;
+    rerankExplanation?: string | null;
   }>;
   classification: {
     primary_collection: string;
@@ -153,9 +157,10 @@ export async function classifyAndSearch(
     collectionsSearched: string[];
     totalCandidates: number;
     searchTimeMs: number;
+    rerankApplied?: boolean;
   };
 }> {
-  return callFunction("classify_and_search", { query, limit, threshold, model, thinkingLevel, debugMode });
+  return callFunction("classify_and_search", { query, limit, threshold, model, thinkingLevel, debugMode, enableRerank });
 }
 
 /**
@@ -187,4 +192,40 @@ export async function createVectorIndex(
   operationName: string | null;
 }> {
   return callFunction("create_vector_index", { collectionId });
+}
+
+/**
+ * Generate a grounded answer based on retrieved documents.
+ */
+export async function generateGroundedAnswer(
+  query: string,
+  documents: Array<{
+    documentId: string;
+    collectionId: string;
+    fileName: string;
+    summary: string;
+    keywords?: string[];
+    storagePath?: string;
+  }>,
+  conversationHistory?: Array<{
+    role: "user" | "assistant";
+    content: string;
+  }>
+): Promise<{
+  answer: string;
+  citations: Array<{
+    documentId: string;
+    collectionId: string;
+    fileName: string;
+    summary: string;
+    relevanceNote?: string;
+    storagePath?: string;
+  }>;
+  confidence: number;
+}> {
+  return callFunction("generate_grounded_answer", {
+    query,
+    documents,
+    conversationHistory,
+  });
 }
