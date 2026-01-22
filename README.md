@@ -1,10 +1,32 @@
-# Firestore Vector Embeddings Reference
+# Hybrid RAG for GCP Firestore
 
-A complete reference implementation for semantic search in Firebase Firestore using vector embeddings and Google Gemini AI.
+A **metadata-first agentic RAG** implementation for Firebase Firestore using Google Gemini AI. This approach solves the fundamental problem of traditional RAG systems: they fail with multimodal documents.
+
+## Why This Approach?
+
+### The Problem with Traditional RAG
+
+Traditional RAG systems chunk documents into text fragments and embed each chunk. This fails badly with real-world documents:
+
+- **Diagrams and figures** are lost entirely or reduced to meaningless captions
+- **Tables** become garbled rows without headers
+- **Images** (schematics, photos, charts) provide no searchable content
+- **Document structure** is destroyed—chunks have no context about where they came from
+
+### Metadata-First RAG: A Better Way
+
+Instead of chunking, this system:
+
+1. **Analyzes the full document** using Gemini's multimodal capabilities (sees text, images, tables, diagrams)
+2. **Extracts rich metadata**: summary, chapter summaries, keywords, and schema-defined fields
+3. **Embeds the metadata** (not the document chunks) for semantic search
+4. **Returns full documents** to the LLM for grounded answer generation
+
+The LLM receives complete context—not fragments—enabling high-quality answers grounded in the actual source material.
 
 ## Overview
 
-This reference demonstrates how to implement automatic vector embedding generation and similarity search for document content in Firestore. The pattern enables natural language queries like:
+This reference implements an **agentic retrieval pipeline** for natural language queries like:
 
 - "FinFET process with stress engineering"
 - "yield improvement for advanced nodes"
@@ -12,57 +34,49 @@ This reference demonstrates how to implement automatic vector embedding generati
 
 ## How It Works
 
+### Ingestion Pipeline
+
 ```
-Document Created/Updated
+PDF / Audio / Video (< 2-4MB inline, or Cloud Storage link)
          │
          ▼
-  Content field written (e.g., summary + details)
+  Gemini Multimodal Analysis (gemini-3-flash-preview)
+  ├── "Sees" entire document: text, images, tables, diagrams
+  └── Extracts structured metadata:
+         │
+         ├── summary: 2-3 sentence overview
+         ├── chapters[]: section-by-section summaries
+         ├── keywords[]: searchable terms
+         └── schema fields: product family, category, etc.
          │
          ▼
-  Firestore Trigger fires automatically
+  Metadata Text → Embedding (gemini-embedding-001, 2048 dims)
          │
          ▼
-  on_content_write trigger
+  Stored in Firestore with Vector Index
+```
+
+### Retrieval Pipeline (Agentic)
+
+```
+User Query + Conversation History
          │
-         ├── Detects new/updated content
-         │   (compares contentUpdatedAt timestamps)
+         ▼
+  AI Classifier (gemini-3-pro-preview)
+  └── Routes to relevant collection(s)
          │
-         ├── Generates 2048-dim embedding
-         │   (Vertex AI gemini-embedding-001)
+         ▼
+  Hybrid Search
+  ├── Exact keyword matching (part numbers, SKUs)
+  └── Semantic similarity on metadata
          │
-         └── Stores contentEmbedding field
-                {
-                  vector: [0.123, -0.456, ...],
-                  embeddedAt: ISO timestamp,
-                  modelVersion: "gemini-embedding-001"
-                }
-                │
-                ▼
-            Vector Index Updated
-                │
-                ▼
-        User searches with natural language
-        (e.g., "metal fill optimization techniques")
-                │
-                ▼
-    vector_search Cloud Function
-                │
-                ├── Generate query embedding
-                ├── Call Firestore find_nearest()
-                │   (DOT_PRODUCT distance measure)
-                │
-                ├── Calculate relevance scores
-                │   (similarity normalized to 0-100%)
-                │
-                └── Return ranked results
-                    {
-                      documentId, distance,
-                      relevanceScore, summary
-                    }
-                    │
-                    ▼
-            Display in UI
-            (sorted by relevance)
+         ▼
+  AI Reranker (optional)
+  └── Reviews results, selects best documents
+         │
+         ▼
+  Full Document(s) + Query → LLM
+  └── Grounded answer with complete context
 ```
 
 ## Directory Structure
@@ -188,10 +202,29 @@ This reference uses a semiconductor documentation example:
 | Technology | Purpose |
 |------------|---------|
 | Firebase Firestore | Document database with vector search |
-| Vertex AI | Embedding model (`gemini-embedding-001`, 2048 dims) and Gemini (`gemini-2.0-flash-001`) |
+| Gemini 3 Pro/Flash | Query classification and document analysis (`gemini-3-pro-preview`, `gemini-3-flash-preview`) |
+| Gemini Embeddings | Semantic embeddings (`gemini-embedding-001`, 2048 dims) |
 | Firebase Cloud Functions | Serverless compute (Python) |
 | Next.js / React | Admin site and web client |
 | Python/Streamlit | Python client and dashboard UI |
+
+## Supported Content Types
+
+| Type | Storage | Notes |
+|------|---------|-------|
+| PDF (small) | Firestore binary field | Direct storage for quick access |
+| PDF (large) | Cloud Storage + pointer | Reference stored in Firestore document |
+| PDF (very large) | Chapter segmentation | Agentic splitting creates per-chapter entries with individual metadata |
+| Audio | Future | Extensible architecture |
+| Video | Future | Extensible architecture |
+
+### Large Document Handling
+
+For very large documents (100+ pages), the system supports **agentic chapter segmentation**:
+- Each chapter becomes its own Firestore document with rich metadata
+- Chapter PDFs can be stored inline (small) or in Cloud Storage (large)
+- Search can return specific chapters, not just whole documents
+- LLM receives only the relevant chapter(s) for focused context
 
 ## Cost Considerations
 

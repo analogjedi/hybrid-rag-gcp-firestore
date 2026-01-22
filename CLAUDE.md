@@ -4,7 +4,39 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A reference implementation for semantic search in Firebase Firestore using vector embeddings and Google Gemini AI. The system automatically generates 2048-dimensional embeddings for document content and enables natural language similarity search.
+A **metadata-first agentic RAG** system for Firebase Firestore using Google Gemini AI. Unlike traditional RAG that chunks documents into text fragments, this system extracts rich metadata from full documents using Gemini's multimodal capabilities, then performs hybrid search on that metadata.
+
+## Architecture Philosophy
+
+### Why Metadata-First?
+
+Traditional RAG fails with multimodal documents:
+- Text chunking destroys diagrams, tables, and images
+- Chunks lose document structure and context
+- Semantic search on fragments returns incomplete results
+
+This system instead:
+1. **Gemini analyzes the full document** (PDF, audio, video) including all visual content
+2. **Extracts structured metadata**: summary, chapter summaries, keywords, schema fields
+3. **Embeds the metadata** (not chunks) for semantic search
+4. **Returns full documents** to the LLM for grounded answers
+
+### Agentic Retrieval Pipeline
+
+```
+Query → AI Classifier → Collection Selection
+     → Hybrid Search (keyword + semantic) on metadata
+     → AI Reranker → Select best documents
+     → Full Document(s) + Query → LLM → Grounded Answer
+```
+
+### Supported Content
+
+- **PDF (small)**: Stored as binary directly in Firestore document
+- **PDF (large)**: Stored in Cloud Storage with pointer reference in Firestore
+- **PDF (very large)**: Agentic chapter segmentation—each chapter becomes its own Firestore entry with individual metadata and embedding
+- **Audio/Video**: Extensible architecture (future)
+- **Agentic endpoints**: Custom handlers for specialized content types
 
 ## Architecture
 
@@ -32,11 +64,11 @@ The project has four main components:
 
 - **Embedding Model**: `gemini-embedding-001` via Vertex AI (2048 dimensions)
 - **Classification Model**: `gemini-3-pro-preview` or `gemini-3-flash-preview` via `google-genai` SDK
-- **Document Analysis**: `gemini-2.0-flash-001` via Vertex AI
+- **Document Analysis**: `gemini-3-flash-preview` via Vertex AI (multimodal PDF/image analysis)
 - **Distance Measure**: DOT_PRODUCT (higher = more similar, normalized vectors)
 - **Search Task Type**: `RETRIEVAL_QUERY` for queries, `RETRIEVAL_DOCUMENT` for corpus
 - **Authentication**:
-  - Embeddings: Vertex AI with Application Default Credentials (ADC)
+  - Embeddings & Document Analysis: Vertex AI with Application Default Credentials (ADC)
   - Gemini 3 Classification: API key via Firebase Secrets (`GEMINI_API_KEY`)
 
 ## Build & Development Commands
