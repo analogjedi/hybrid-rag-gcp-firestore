@@ -27,11 +27,14 @@ This system instead:
 
 ```
 Query → AI Classifier → Collection Selection
+     │                  (uses aggregated document keywords with frequencies)
      → Hybrid Search (keyword + semantic) on metadata
      → Element Search (parallel) on tables/figures/images
      → AI Reranker → Select best documents + elements
      → Full Document(s) + Query → LLM → Grounded Answer
 ```
+
+**Keyword Aggregation:** Document keywords are automatically aggregated to the collection schema with frequency counts. This helps the classifier route queries correctly even when specific terms (like company names) aren't in the collection description. Use the "Refresh Keywords" button in the collection dashboard to rebuild after bulk imports.
 
 ### Supported Content
 
@@ -53,6 +56,7 @@ The project has four main components:
      - `generate_all_element_embeddings`: Batch element embedding generation
      - `classify_and_search`: Agentic query classification + vector search (includes elements)
      - `generate_grounded_answer`: LLM response with element-aware citations
+     - `rebuild_collection_keywords`: Rebuild aggregated document keywords for classifier
      - `backfill_embeddings`: Batch processing for existing documents
 
 2. **Admin Site (Next.js)** - `admin_site/`

@@ -203,10 +203,27 @@ def classify_query(
     for schema in schemas:
         coll = schema.get("collection", {})
         hints = schema.get("classifier_hints", {})
+
+        # Manual keywords (defined in schema)
+        manual_keywords = hints.get("keywords", [])
+
+        # Document keywords with frequencies (auto-aggregated from documents)
+        doc_keywords = hints.get("document_keywords", {})
+        # Sort by frequency (descending) and format as "keyword(count)"
+        doc_keyword_list = sorted(
+            doc_keywords.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )
+        doc_keywords_str = ", ".join(
+            f"{kw}({count})" for kw, count in doc_keyword_list
+        ) if doc_keyword_list else "none yet"
+
         collections_info.append(
             f"""- {coll.get('id')} ("{coll.get('display_name')}")
   Description: {coll.get('description', '')}
-  Keywords: {', '.join(hints.get('keywords', [])[:10])}
+  Manual keywords: {', '.join(manual_keywords[:10]) if manual_keywords else 'none'}
+  Document keywords (with frequency): {doc_keywords_str}
   Example queries: {'; '.join(hints.get('example_queries', [])[:3])}"""
         )
 

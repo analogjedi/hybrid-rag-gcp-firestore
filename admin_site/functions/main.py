@@ -7,21 +7,23 @@ Firebase discovers decorated functions from this entry point.
 Functions:
 1. process_document - Gemini multimodal PDF analysis (extracts tables/figures/images)
 2. process_pending_documents - Batch document processing
-3. generate_document_embedding - Single document embedding
-4. generate_embeddings_for_ready_docs - Batch embedding generation
-5. generate_element_embeddings_for_document - Element embeddings for a single document
-6. generate_all_element_embeddings - Batch element embedding generation
-7. classify_and_search - Agentic query classification + multi-collection search (includes elements)
-8. generate_grounded_answer - Grounded LLM response with citations (element-aware)
-9. get_all_collection_stats - Dashboard statistics
-10. backfill_embeddings - Batch embedding backfill
-11. create_vector_index - Vector index management
+3. rebuild_collection_keywords - Rebuild aggregated document keywords for classifier
+4. generate_document_embedding - Single document embedding
+5. generate_embeddings_for_ready_docs - Batch embedding generation
+6. generate_element_embeddings_for_document - Element embeddings for a single document
+7. generate_all_element_embeddings - Batch element embedding generation
+8. classify_and_search - Agentic query classification + multi-collection search (includes elements)
+9. generate_grounded_answer - Grounded LLM response with citations (element-aware)
+10. get_all_collection_stats - Dashboard statistics
+11. backfill_embeddings - Batch embedding backfill
+12. create_vector_index - Vector index management
 """
 
 # Document processing
 from document_processing import (
     process_document,
     process_pending_documents,
+    rebuild_collection_keywords,
 )
 
 # Embedding generation
@@ -50,6 +52,7 @@ __all__ = [
     # Document processing
     "process_document",
     "process_pending_documents",
+    "rebuild_collection_keywords",
     # Embeddings
     "generate_document_embedding",
     "generate_embeddings_for_ready_docs",

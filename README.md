@@ -72,6 +72,7 @@ User Query + Conversation History
          ▼
   AI Classifier (gemini-2.5-pro)
   └── Routes to relevant collection(s)
+      Uses: collection descriptions + aggregated document keywords with frequencies
          │
          ▼
   Hybrid Search (parallel)
@@ -93,6 +94,27 @@ User Query + Conversation History
   Full Document(s) + Query → LLM
   └── Grounded answer with element-aware citations
 ```
+
+### Classifier Keyword Aggregation
+
+The AI classifier routes queries to the correct collection(s). To improve routing accuracy, keywords from all documents are automatically aggregated to the collection schema with frequency counts:
+
+```
+Document ingested → Keywords extracted → Frequencies updated in collection schema
+                                          └── valve(3), employee(5), handbook(2), ...
+```
+
+The classifier sees these aggregated keywords when deciding which collection to search:
+
+```
+Collection: human_resources_all
+  Description: Employee handbooks and HR policies
+  Document keywords (with frequency): valve(3), employee(5), handbook(2), onboarding(4), ...
+```
+
+This allows queries like "In the Valve handbook, what game did they release in 2007?" to correctly route to the HR collection, even though "Valve" isn't in the collection description.
+
+**Manual Refresh:** Each collection dashboard has a "Refresh Keywords" button to rebuild aggregated keywords from all documents. Use this after bulk imports or to debug routing issues.
 
 ## Directory Structure
 

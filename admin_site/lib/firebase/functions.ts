@@ -254,6 +254,21 @@ export async function generateElementEmbeddingsForDocument(
 }
 
 /**
+ * Rebuild aggregated document keywords for a collection.
+ * Scans all documents and rebuilds keyword frequency counts.
+ */
+export async function rebuildCollectionKeywords(
+  collectionId: string
+): Promise<{
+  success: boolean;
+  documentsScanned: number;
+  uniqueKeywords: number;
+  keywords: Record<string, number>;
+}> {
+  return callFunction("rebuild_collection_keywords", { collectionId });
+}
+
+/**
  * Generate a grounded answer based on retrieved documents.
  */
 export async function generateGroundedAnswer(

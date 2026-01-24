@@ -4,6 +4,7 @@ import { Header } from "@/components/layout/Header";
 import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
 import { CollectionStats } from "@/components/collections/CollectionStats";
 import { ProcessingActions } from "@/components/collections/ProcessingActions";
+import { RebuildKeywordsAction } from "@/components/collections/RebuildKeywordsAction";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -66,6 +67,9 @@ export default async function CollectionDetailPage({ params }: PageProps) {
 
         {/* AI Processing Actions */}
         <ProcessingActions collectionId={collectionId} stats={stats} />
+
+        {/* Keyword Aggregation */}
+        <RebuildKeywordsAction collectionId={collectionId} />
 
         {/* Quick Actions */}
         <div className="grid gap-4 md:grid-cols-3">

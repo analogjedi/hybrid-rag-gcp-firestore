@@ -34,6 +34,8 @@ export interface EmbeddingConfig {
 export interface ClassifierHints {
   keywords: string[];
   example_queries: string[];
+  // Auto-aggregated from documents: keyword -> frequency count
+  document_keywords?: Record<string, number>;
 }
 
 export interface CollectionSchema {

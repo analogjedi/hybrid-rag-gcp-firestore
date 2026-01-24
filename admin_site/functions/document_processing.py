@@ -107,6 +107,11 @@ def process_document(req: https_fn.CallableRequest) -> dict[str, Any]:
             db, collection_id, doc_id, metadata, doc_data
         )
 
+        # Aggregate document keywords to collection schema for classifier
+        keywords = metadata.get("keywords", [])
+        if keywords:
+            update_collection_keywords(db, collection_id, keywords)
+
         print(f"Successfully processed document {doc_id} with {element_count} elements")
 
         return {
@@ -124,6 +129,76 @@ def process_document(req: https_fn.CallableRequest) -> dict[str, Any]:
             }
         )
         return {"success": False, "error": str(e)}
+
+
+@https_fn.on_call(
+    memory=options.MemoryOption.MB_512,
+    timeout_sec=120,
+)
+def rebuild_collection_keywords(req: https_fn.CallableRequest) -> dict[str, Any]:
+    """
+    Rebuild the aggregated document keywords for a collection.
+
+    This scans all documents in the collection and rebuilds the keyword
+    frequency counts from scratch. Useful for:
+    - Initial setup after deploying this feature
+    - Debugging/testing classifier routing
+    - Recovering from inconsistent state
+
+    Input:
+    - collectionId: The collection ID to rebuild keywords for
+
+    Returns:
+    - success: Whether rebuild succeeded
+    - documentsScanned: Number of documents processed
+    - uniqueKeywords: Number of unique keywords found
+    - keywords: The rebuilt keyword frequencies (for debugging)
+    """
+    collection_id = req.data.get("collectionId")
+
+    if not collection_id:
+        raise https_fn.HttpsError(
+            code=https_fn.FunctionsErrorCode.INVALID_ARGUMENT,
+            message="collectionId is required",
+        )
+
+    db = get_db()
+
+    # Scan all documents in the collection
+    docs_ref = db.collection(f"{collection_id}_documents")
+    docs = docs_ref.stream()
+
+    # Aggregate keywords
+    keyword_counts: dict[str, int] = {}
+    documents_scanned = 0
+
+    for doc in docs:
+        documents_scanned += 1
+        doc_data = doc.to_dict()
+        content = doc_data.get("content", {})
+        keywords = content.get("keywords", [])
+
+        for keyword in keywords:
+            # Sanitize keyword for Firestore field path
+            safe_keyword = keyword.replace(".", "_").replace("/", "_")
+            keyword_counts[safe_keyword] = keyword_counts.get(safe_keyword, 0) + 1
+
+    # Update the schema with rebuilt keywords
+    schema_ref = db.document(f"_system/config/schemas/{collection_id}")
+
+    # Clear existing and set new keywords
+    schema_ref.update({
+        "classifier_hints.document_keywords": keyword_counts
+    })
+
+    print(f"Rebuilt keywords for {collection_id}: {documents_scanned} docs, {len(keyword_counts)} unique keywords")
+
+    return {
+        "success": True,
+        "documentsScanned": documents_scanned,
+        "uniqueKeywords": len(keyword_counts),
+        "keywords": keyword_counts,
+    }
 
 
 @https_fn.on_call(
@@ -206,6 +281,11 @@ def process_pending_documents(req: https_fn.CallableRequest) -> dict[str, Any]:
                 db, collection_id, doc_id, metadata, doc_data
             )
 
+            # Aggregate document keywords to collection schema for classifier
+            keywords = metadata.get("keywords", [])
+            if keywords:
+                update_collection_keywords(db, collection_id, keywords)
+
             processed += 1
             details.append({
                 "documentId": doc_id,
@@ -225,6 +305,44 @@ def process_pending_documents(req: https_fn.CallableRequest) -> dict[str, Any]:
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
+
+
+def update_collection_keywords(
+    db,
+    collection_id: str,
+    keywords: list[str],
+) -> None:
+    """
+    Update the collection schema's document_keywords with keyword frequencies.
+
+    This aggregates keywords from all documents in the collection to help
+    the classifier route queries to the correct collection.
+
+    Args:
+        db: Firestore client
+        collection_id: Collection ID
+        keywords: List of keywords from the processed document
+    """
+    from google.cloud.firestore import Increment
+
+    schema_ref = db.document(f"_system/config/schemas/{collection_id}")
+
+    # Update keyword frequencies using atomic increment
+    # This ensures concurrent document processing doesn't lose counts
+    updates = {}
+    for keyword in keywords:
+        # Sanitize keyword for Firestore field path (no dots, slashes)
+        safe_keyword = keyword.replace(".", "_").replace("/", "_")
+        field_path = f"classifier_hints.document_keywords.{safe_keyword}"
+        updates[field_path] = Increment(1)
+
+    if updates:
+        try:
+            schema_ref.update(updates)
+            print(f"Updated {len(keywords)} keywords for collection {collection_id}")
+        except Exception as e:
+            # Log but don't fail document processing if keyword update fails
+            print(f"Warning: Failed to update collection keywords: {e}")
 
 
 def create_element_documents(

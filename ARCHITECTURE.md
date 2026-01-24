@@ -176,6 +176,82 @@ Gemini then cites specific sections in its answer:
 
 ---
 
+## Classifier Keyword Aggregation
+
+The AI classifier routes queries to relevant collections based on collection metadata. To improve routing accuracy, document keywords are automatically aggregated to the collection schema.
+
+### Why Keyword Aggregation?
+
+Collection descriptions alone may not capture all the specific terms that appear in documents. For example:
+- A query "In the Valve handbook, what game did they release in 2007?"
+- The HR collection description says "Employee handbooks and HR policies"
+- Without keyword aggregation, the classifier might route to "Products" because "game" sounds product-related
+
+With keyword aggregation, the classifier sees actual document terms:
+```
+Collection: human_resources_all
+  Description: Employee handbooks and HR policies
+  Document keywords: valve(3), employee(5), handbook(2), portal(1), steam(1), ...
+```
+
+The classifier now sees "valve" explicitly listed and routes correctly.
+
+### How It Works
+
+**Automatic Aggregation (on document ingestion):**
+```python
+# In document_processing.py
+def update_collection_keywords(db, collection_id: str, keywords: list[str]):
+    """Atomically increment keyword frequencies in collection schema."""
+    from google.cloud.firestore import Increment
+
+    schema_ref = db.document(f"_system/config/schemas/{collection_id}")
+    updates = {}
+    for keyword in keywords:
+        safe_keyword = keyword.replace(".", "_").replace("/", "_")
+        field_path = f"classifier_hints.document_keywords.{safe_keyword}"
+        updates[field_path] = Increment(1)
+
+    schema_ref.update(updates)
+```
+
+**Manual Rebuild (for existing documents):**
+```
+POST /api/collections/{id}/rebuild-keywords
+```
+
+Or use the "Refresh Keywords" button in the collection dashboard UI.
+
+### Data Model
+
+```
+_system/config/schemas/{collectionId}
+├── classifier_hints: {
+│   ├── keywords: string[]              # Manual keywords (curated)
+│   ├── example_queries: string[]       # Example search queries
+│   └── document_keywords: {            # Auto-aggregated from documents
+│       ├── valve: 3                    # keyword: frequency count
+│       ├── employee: 5
+│       └── ...
+│       }
+│   }
+```
+
+### Classifier Prompt
+
+The classifier receives both manual and document keywords:
+
+```
+Available collections:
+- human_resources_all ("HR Policies & Employee Handbooks")
+  Description: Employee handbooks and HR policies
+  Manual keywords: hr, policies, benefits
+  Document keywords (with frequency): valve(3), employee(5), handbook(2), portal(1)
+  Example queries: "vacation policy"; "onboarding process"
+```
+
+---
+
 ## Embedding Generation Patterns
 
 ### Pattern 1: Trigger-Based (Recommended)
