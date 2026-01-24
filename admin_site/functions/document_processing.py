@@ -427,12 +427,12 @@ def analyze_document_with_gemini(storage_path: str, prompt: str) -> dict[str, An
     # Create a Part from the Cloud Storage URI
     pdf_part = Part.from_uri(storage_path, mime_type="application/pdf")
 
-    # Generate content
+    # Generate content with higher token limit for large documents
     response = model.generate_content(
         [pdf_part, prompt],
         generation_config={
             "temperature": 0.1,
-            "max_output_tokens": 8192,
+            "max_output_tokens": 16384,  # Increased for documents with many elements
             "response_mime_type": "application/json",
         },
     )
@@ -446,7 +446,37 @@ def analyze_document_with_gemini(storage_path: str, prompt: str) -> dict[str, An
         # Remove first and last lines (```json and ```)
         response_text = "\n".join(lines[1:-1])
 
-    metadata = json.loads(response_text)
+    # Attempt to parse JSON with better error handling
+    try:
+        metadata = json.loads(response_text)
+    except json.JSONDecodeError as e:
+        print(f"JSON parse error: {e}")
+        print(f"Response length: {len(response_text)} chars")
+        print(f"Response preview (last 500 chars): ...{response_text[-500:]}")
+
+        # Try to repair truncated JSON by finding the last complete object
+        # This handles cases where the response was cut off
+        repair_attempts = [
+            response_text + ']}',      # Missing closing brackets
+            response_text + '"}]}',    # Missing quote and brackets
+            response_text + '"}]}'     # Missing quote and single bracket
+        ]
+
+        for attempt in repair_attempts:
+            try:
+                metadata = json.loads(attempt)
+                print("Successfully repaired truncated JSON")
+                break
+            except json.JSONDecodeError:
+                continue
+        else:
+            # If repair failed, raise with more context
+            raise ValueError(
+                f"Failed to parse Gemini response as JSON. "
+                f"Response length: {len(response_text)} chars. "
+                f"Error: {e}. "
+                f"This may indicate the response was truncated due to token limits."
+            )
 
     # Normalize chapters field
     if "chapters" not in metadata or metadata["chapters"] is None:

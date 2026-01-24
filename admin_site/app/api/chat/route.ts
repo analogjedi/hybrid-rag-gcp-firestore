@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       query,
       limit: 5,
       threshold: 0.25,
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       thinkingLevel: "LOW",
       enableRerank: true,
     };
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
         query,
         5,      // limit to top 5 documents for grounding
         0.25,   // threshold
-        "gemini-3-flash-preview",  // fast classification
+        "gemini-2.5-flash",  // fast classification
         "LOW",  // thinking level
         false,  // debug mode
         true    // enable reranking
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Step 2: Prepare documents for grounding
+    // Step 2: Prepare documents for grounding (include rich metadata for granular citations)
     const documents = searchResult.results.map((result) => ({
       documentId: result.documentId,
       collectionId: result.collectionId,
@@ -113,6 +113,16 @@ export async function POST(request: NextRequest) {
       summary: result.summary,
       keywords: result.keywords,
       storagePath: result.storagePath,
+      // Include chapter/figure metadata for granular citations
+      chapters: result.chapters || [],
+      figures: result.figures || [],
+      tables: result.tables || [],
+      // Include element-specific fields if this is an element result
+      matchType: result.matchType,
+      elementId: result.elementId,
+      elementType: result.elementType,
+      elementTitle: result.elementTitle,
+      elementPageNumber: result.elementPageNumber,
     }));
 
     // Step 3: Generate grounded answer

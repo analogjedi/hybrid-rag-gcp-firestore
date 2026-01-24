@@ -221,6 +221,10 @@ export interface SearchResult {
   keywords: string[];
   fileName: string;
   storagePath: string;
+  // Document structure for granular citations
+  chapters?: ChapterMetadata[];
+  figures?: ExtractedFigure[];
+  tables?: ExtractedTable[];
   scoreBreakdown?: ScoreBreakdown;  // Present when debugMode is enabled
   // Rerank fields (present when reranking is applied)
   rerankPosition?: number;  // Position after reranking (0-indexed)

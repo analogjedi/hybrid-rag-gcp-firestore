@@ -53,6 +53,8 @@ export async function POST(request: NextRequest) {
         );
         return NextResponse.json({
           success: true,
+          metadata: processResult.metadata,
+          elementsCreated: processResult.elementsCreated,
           processing: processResult,
           embedding: embedResult,
         });
@@ -60,6 +62,8 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: processResult.success,
+        metadata: processResult.metadata,
+        elementsCreated: processResult.elementsCreated,
         processing: processResult,
       });
     }

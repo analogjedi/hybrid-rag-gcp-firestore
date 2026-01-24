@@ -32,10 +32,11 @@ def format_conversation_history(history: list[dict[str, str]] | None) -> str:
 
 
 def build_document_reference_list(documents: list[dict[str, Any]]) -> str:
-    """Build a reference list of document names for the prompt, with element info if available."""
+    """Build a detailed reference list including document structure for granular citations."""
     refs = []
     for i, doc in enumerate(documents):
-        ref_text = f"[Doc {i + 1}]: {doc.get('fileName', 'Unknown')}"
+        doc_num = i + 1
+        ref_lines = [f"[Doc {doc_num}]: {doc.get('fileName', 'Unknown')}"]
 
         # Add element-specific info if this is an element result
         if doc.get("elementType"):
@@ -43,14 +44,59 @@ def build_document_reference_list(documents: list[dict[str, Any]]) -> str:
             element_title = doc.get("elementTitle") or doc.get("elementId", "")
             page_num = doc.get("elementPageNumber")
 
-            element_info = f" ({element_type}: {element_title}"
+            element_info = f"  (Matched {element_type}: {element_title}"
             if page_num:
                 element_info += f", page {page_num}"
             element_info += ")"
-            ref_text += element_info
+            ref_lines.append(element_info)
 
-        refs.append(ref_text)
-    return "\n".join(refs)
+        # Add table of contents if chapters are available
+        chapters = doc.get("chapters", [])
+        if chapters:
+            ref_lines.append("  Table of Contents:")
+            for chapter in chapters[:10]:  # Limit to first 10 chapters
+                title = chapter.get("title", "Untitled")
+                page_start = chapter.get("pageStart")
+                page_end = chapter.get("pageEnd")
+                if page_start and page_end:
+                    ref_lines.append(f"    - \"{title}\" (pp. {page_start}-{page_end})")
+                elif page_start:
+                    ref_lines.append(f"    - \"{title}\" (p. {page_start})")
+                else:
+                    ref_lines.append(f"    - \"{title}\"")
+
+        # Add figure list if figures are available
+        figures = doc.get("figures", [])
+        if figures:
+            ref_lines.append(f"  Figures ({len(figures)} total):")
+            for fig in figures[:5]:  # Show first 5 figures
+                fig_title = fig.get("title") or fig.get("id", "Figure")
+                page_num = fig.get("pageNumber")
+                fig_type = fig.get("figureType", "")
+                if page_num:
+                    ref_lines.append(f"    - {fig_title} ({fig_type}, p. {page_num})")
+                else:
+                    ref_lines.append(f"    - {fig_title} ({fig_type})")
+            if len(figures) > 5:
+                ref_lines.append(f"    ... and {len(figures) - 5} more figures")
+
+        # Add table list if tables are available
+        tables = doc.get("tables", [])
+        if tables:
+            ref_lines.append(f"  Tables ({len(tables)} total):")
+            for tbl in tables[:5]:  # Show first 5 tables
+                tbl_title = tbl.get("title") or tbl.get("id", "Table")
+                page_num = tbl.get("pageNumber")
+                if page_num:
+                    ref_lines.append(f"    - {tbl_title} (p. {page_num})")
+                else:
+                    ref_lines.append(f"    - {tbl_title}")
+            if len(tables) > 5:
+                ref_lines.append(f"    ... and {len(tables) - 5} more tables")
+
+        refs.append("\n".join(ref_lines))
+
+    return "\n\n".join(refs)
 
 
 # =============================================================================
@@ -144,6 +190,7 @@ def generate_grounded_answer(req: https_fn.CallableRequest) -> dict[str, Any]:
 
     # Build the prompt - referencing the attached documents
     prompt = f"""{conv_context}I have attached {len(valid_docs)} PDF document(s) for you to reference:
+
 {build_document_reference_list(valid_docs)}
 
 User Question: {query}
@@ -151,24 +198,29 @@ User Question: {query}
 Instructions:
 1. Read and analyze the attached PDF document(s) thoroughly
 2. Answer the user's question based ONLY on information found in these documents
-3. Cite your sources using [Doc 1], [Doc 2], etc. when referencing specific information
+3. **IMPORTANT - Use granular citations**: When citing, be as specific as possible:
+   - For section/chapter references: [Doc 1, "Part 2: Settling In", pp. 9-20]
+   - For figure references: [Doc 1, Fig. 2-1, p. 12]
+   - For table references: [Doc 1, Table 3, p. 45]
+   - For general document references: [Doc 1]
+   - Use the section titles and page numbers from the Table of Contents above
 4. If the documents don't contain enough information to fully answer, say so clearly
 5. Provide a detailed, helpful answer - don't just give one sentence if more detail is available
 6. If the question asks about processes, procedures, or policies, explain them step by step
 
 Return a JSON object with:
-- "answer": Your detailed response with citation markers like [Doc 1]
+- "answer": Your detailed response with GRANULAR citation markers (include section names and page numbers when relevant)
 - "cited_documents": Array of document indices (1-indexed) that you referenced
 - "confidence": Number 0.0-1.0 indicating how well the documents answered the question
-- "relevance_notes": Object mapping document indices (as strings) to brief notes about what each contributed
+- "relevance_notes": Object mapping document indices (as strings) to brief notes about which specific sections were most relevant
 
 Example:
 {{
-  "answer": "According to the employee handbook, the hiring process involves several steps: First, candidates submit applications through the company website [Doc 1]. Then, qualified candidates are invited for interviews with the hiring team [Doc 1]. The process typically takes 2-3 weeks from application to offer [Doc 1].",
+  "answer": "According to the employee handbook, the hiring process involves several steps. First, candidates submit applications through the company website [Doc 1, \"Part 5: Hiring\", pp. 30-33]. The document emphasizes that hiring is considered 'the most important thing in the universe' at Valve [Doc 1, \"Part 5: Hiring\", p. 30]. The process typically involves peer interviews where existing employees evaluate both skills and cultural fit [Doc 1, \"Part 5: Hiring\", pp. 31-32]. Figure 5-1 illustrates how hiring connects to all other company activities [Doc 1, Fig. 5-1, p. 30].",
   "cited_documents": [1],
   "confidence": 0.95,
   "relevance_notes": {{
-    "1": "Contains detailed hiring process information"
+    "1": "Part 5: Hiring (pp. 30-33) contains detailed hiring process information; Fig. 5-1 shows hiring's central importance"
   }}
 }}
 

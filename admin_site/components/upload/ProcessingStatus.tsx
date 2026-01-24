@@ -14,6 +14,7 @@ interface ProcessingStatusProps {
   initialStatus?: DocumentStatus;
   pollInterval?: number;
   onProcessingStarted?: () => void;
+  onStatusChange?: (status: DocumentStatus) => void;
 }
 
 const statusConfig: Record<
@@ -70,6 +71,7 @@ export function ProcessingStatus({
   initialStatus = "pending",
   pollInterval = 2000,
   onProcessingStarted,
+  onStatusChange,
 }: ProcessingStatusProps) {
   const [status, setStatus] = useState<DocumentStatus>(initialStatus);
   const [error, setError] = useState<string | null>(null);
@@ -87,7 +89,11 @@ export function ProcessingStatus({
         );
         if (response.ok) {
           const data = await response.json();
-          setStatus(data.document.status);
+          const newStatus = data.document.status as DocumentStatus;
+          if (newStatus !== status) {
+            setStatus(newStatus);
+            onStatusChange?.(newStatus);
+          }
           if (data.document.error) {
             setError(data.document.error);
           }
@@ -99,7 +105,7 @@ export function ProcessingStatus({
 
     const interval = setInterval(poll, pollInterval);
     return () => clearInterval(interval);
-  }, [documentId, collectionId, status, pollInterval]);
+  }, [documentId, collectionId, status, pollInterval, onStatusChange]);
 
   const handleProcessNow = async () => {
     setIsProcessing(true);

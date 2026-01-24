@@ -25,7 +25,8 @@ vertexai.init(project=PROJECT_ID, location=LOCATION)
 DATABASE_ID = os.environ.get("FIRESTORE_DATABASE_ID", "test")
 
 # Models
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3-flash-preview")
+# Note: gemini-2.5-flash is GA and stable; gemini-3-flash is preview
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "gemini-embedding-001")
 EMBEDDING_DIMENSIONS = 2048  # Firestore max; gemini-embedding-001 supports up to 3072
 

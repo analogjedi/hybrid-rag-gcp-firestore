@@ -5,9 +5,11 @@ import { Header } from "@/components/layout/Header";
 import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
 import { FileDropzone } from "@/components/upload/FileDropzone";
 import { ProcessingStatus } from "@/components/upload/ProcessingStatus";
+import { UploadPipeline, isProcessingStatus } from "@/components/upload/UploadPipeline";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Play, Loader2 } from "lucide-react";
+import type { DocumentStatus } from "@/types";
 
 interface PageProps {
   params: Promise<{ collectionId: string }>;
@@ -16,7 +18,7 @@ interface PageProps {
 interface UploadedFile {
   documentId: string;
   fileName: string;
-  status: "pending" | "processing" | "done";
+  status: DocumentStatus;
 }
 
 export default function UploadPage({ params }: PageProps) {
@@ -35,7 +37,15 @@ export default function UploadPage({ params }: PageProps) {
   const handleProcessingStarted = (documentId: string) => {
     setUploadedFiles((prev) =>
       prev.map((f) =>
-        f.documentId === documentId ? { ...f, status: "processing" } : f
+        f.documentId === documentId ? { ...f, status: "analyzing" } : f
+      )
+    );
+  };
+
+  const handleStatusChange = (documentId: string, status: DocumentStatus) => {
+    setUploadedFiles((prev) =>
+      prev.map((f) =>
+        f.documentId === documentId ? { ...f, status } : f
       )
     );
   };
@@ -58,9 +68,9 @@ export default function UploadPage({ params }: PageProps) {
         throw new Error(data.error || "Processing failed");
       }
 
-      // Mark all as processing - polling will update actual status
+      // Mark all as analyzing - polling will update actual status
       setUploadedFiles((prev) =>
-        prev.map((f) => (f.status === "pending" ? { ...f, status: "processing" } : f))
+        prev.map((f) => (f.status === "pending" ? { ...f, status: "analyzing" } : f))
       );
     } catch (err) {
       console.error("Process all error:", err);
@@ -70,6 +80,29 @@ export default function UploadPage({ params }: PageProps) {
   };
 
   const pendingCount = uploadedFiles.filter((f) => f.status === "pending").length;
+
+  // Calculate aggregate pipeline state from all files
+  const counts = {
+    uploaded: uploadedFiles.filter((f) => f.status === "pending").length,
+    analyzing: uploadedFiles.filter((f) => f.status === "analyzing").length,
+    embedding: uploadedFiles.filter((f) => ["metadata_ready", "embedding"].includes(f.status)).length,
+    ready: uploadedFiles.filter((f) => f.status === "ready").length,
+  };
+
+  // Determine current pipeline step based on most advanced file
+  const getCurrentPipelineStep = () => {
+    if (uploadedFiles.length === 0) return "upload";
+
+    // Find the most advanced status
+    const statuses = uploadedFiles.map((f) => f.status);
+    if (statuses.some((s) => s === "ready")) return "ready";
+    if (statuses.some((s) => s === "embedding" || s === "metadata_ready")) return "embed";
+    if (statuses.some((s) => s === "analyzing")) return "analyze";
+    return "upload";
+  };
+
+  const currentPipelineStep = getCurrentPipelineStep();
+  const isPipelineProcessing = uploadedFiles.some((f) => isProcessingStatus(f.status));
 
   return (
     <div className="flex flex-col h-full">
@@ -157,6 +190,7 @@ export default function UploadPage({ params }: PageProps) {
                       collectionId={collectionId}
                       fileName={file.fileName}
                       onProcessingStarted={() => handleProcessingStarted(file.documentId)}
+                      onStatusChange={(status) => handleStatusChange(file.documentId, status)}
                     />
                   ))}
                 </div>
@@ -174,36 +208,11 @@ export default function UploadPage({ params }: PageProps) {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 md:grid-cols-4">
-              <div className="p-4 rounded-lg bg-muted/50 text-center">
-                <div className="text-2xl font-bold text-primary mb-1">1</div>
-                <div className="text-sm font-medium">Upload</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  File stored in Cloud Storage
-                </p>
-              </div>
-              <div className="p-4 rounded-lg bg-muted/50 text-center">
-                <div className="text-2xl font-bold text-primary mb-1">2</div>
-                <div className="text-sm font-medium">Analyze</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Gemini extracts metadata
-                </p>
-              </div>
-              <div className="p-4 rounded-lg bg-muted/50 text-center">
-                <div className="text-2xl font-bold text-primary mb-1">3</div>
-                <div className="text-sm font-medium">Embed</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Vector embedding generated
-                </p>
-              </div>
-              <div className="p-4 rounded-lg bg-muted/50 text-center">
-                <div className="text-2xl font-bold text-primary mb-1">4</div>
-                <div className="text-sm font-medium">Ready</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Searchable via similarity
-                </p>
-              </div>
-            </div>
+            <UploadPipeline
+              currentStep={currentPipelineStep}
+              isProcessing={isPipelineProcessing}
+              counts={uploadedFiles.length > 0 ? counts : undefined}
+            />
           </CardContent>
         </Card>
       </div>

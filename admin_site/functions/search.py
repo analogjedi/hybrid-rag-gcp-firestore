@@ -57,7 +57,7 @@ def classify_and_search(req: https_fn.CallableRequest) -> dict[str, Any]:
     # DOT_PRODUCT threshold: minimum similarity to include (0.3 = moderately similar)
     threshold = req.data.get("threshold", 0.3)
     # Model selection and thinking level
-    model_name = req.data.get("model", "gemini-3-pro-preview")
+    model_name = req.data.get("model", "gemini-2.5-pro")
     thinking_level = req.data.get("thinkingLevel", "LOW")
     # Debug mode for multi-permutation search
     debug_mode = req.data.get("debugMode", False)
@@ -180,7 +180,7 @@ def classify_and_search(req: https_fn.CallableRequest) -> dict[str, Any]:
 def classify_query(
     query: str,
     schemas: list[dict[str, Any]],
-    model_name: str = "gemini-3-pro-preview",
+    model_name: str = "gemini-2.5-pro",
     thinking_level: str = "LOW",
 ) -> dict[str, Any]:
     """Classify a query to determine which collection(s) to search and extract search terms."""
@@ -241,17 +241,25 @@ Examples of term extraction:
 - "current sensor hall effect" -> exact_match_terms: [], semantic_search_terms: ["current sensor", "hall effect"]
 - "find datasheet for ACS37630" -> exact_match_terms: ["ACS37630"], semantic_search_terms: ["datasheet"]"""
 
-    # Configure generation with thinking
-    config = types.GenerateContentConfig(
-        temperature=0.1,
-        max_output_tokens=8192,
-        response_mime_type="application/json",
-        thinking_config=types.ThinkingConfig(
-            thinking_level=thinking_level,  # "LOW" or "HIGH"
-        ),
-    )
-
-    print(f"[DEBUG] classify_query: model={model_name}, thinking_level={thinking_level}")
+    # Configure generation - thinking_config only supported by Gemini 3 models
+    if "gemini-3" in model_name:
+        config = types.GenerateContentConfig(
+            temperature=0.1,
+            max_output_tokens=8192,
+            response_mime_type="application/json",
+            thinking_config=types.ThinkingConfig(
+                thinking_level=thinking_level,  # "LOW" or "HIGH"
+            ),
+        )
+        print(f"[DEBUG] classify_query: model={model_name}, thinking_level={thinking_level}")
+    else:
+        # Gemini 2.5 and earlier don't support thinking_config
+        config = types.GenerateContentConfig(
+            temperature=0.1,
+            max_output_tokens=8192,
+            response_mime_type="application/json",
+        )
+        print(f"[DEBUG] classify_query: model={model_name} (no thinking support)")
 
     # Create content
     contents = [
@@ -356,6 +364,10 @@ def search_collection(
                         "keywords": content.get("keywords", []),
                         "fileName": doc_data.get("fileName", ""),
                         "storagePath": doc_data.get("storagePath", ""),
+                        # Include chapter/figure metadata for granular citations
+                        "chapters": content.get("chapters", []),
+                        "figures": content.get("figures", []),
+                        "tables": content.get("tables", []),
                     }
                 )
                 seen_doc_ids.add(doc.id)
@@ -406,6 +418,10 @@ def search_collection(
                 "keywords": content.get("keywords", []),
                 "fileName": doc_data.get("fileName", ""),
                 "storagePath": doc_data.get("storagePath", ""),
+                # Include chapter/figure metadata for granular citations
+                "chapters": content.get("chapters", []),
+                "figures": content.get("figures", []),
+                "tables": content.get("tables", []),
             }
         )
         seen_doc_ids.add(doc.id)

@@ -69,8 +69,8 @@ The project has four main components:
 ## Key Technical Details
 
 - **Embedding Model**: `gemini-embedding-001` via Vertex AI (2048 dimensions)
-- **Classification Model**: `gemini-3-pro-preview` or `gemini-3-flash-preview` via `google-genai` SDK
-- **Document Analysis**: `gemini-3-flash-preview` via Vertex AI (multimodal PDF/image analysis)
+- **Classification Model**: `gemini-2.5-pro` or `gemini-2.5-flash` via `google-genai` SDK
+- **Document Analysis**: `gemini-2.5-flash` via Vertex AI (multimodal PDF/image analysis)
 - **Distance Measure**: DOT_PRODUCT (higher = more similar, normalized vectors)
 - **Search Task Type**: `RETRIEVAL_QUERY` for queries, `RETRIEVAL_DOCUMENT` for corpus
 - **Authentication**:
@@ -226,7 +226,7 @@ config = types.GenerateContentConfig(
 )
 
 response = client.models.generate_content(
-    model="gemini-3-pro-preview",  # or "gemini-3-flash-preview"
+    model="gemini-2.5-pro",  # or "gemini-2.5-flash"
     contents=[types.Content(role="user", parts=[types.Part(text=prompt)])],
     config=config,
 )

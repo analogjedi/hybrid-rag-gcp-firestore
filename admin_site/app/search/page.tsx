@@ -38,7 +38,7 @@ export default function SearchPage() {
   const [lastSearchQuery, setLastSearchQuery] = useState("");
 
   // Model and thinking controls
-  const [model, setModel] = useState<"gemini-3-pro-preview" | "gemini-3-flash-preview">("gemini-3-flash-preview");
+  const [model, setModel] = useState<"gemini-2.5-pro" | "gemini-2.5-flash">("gemini-2.5-flash");
   const [thinkingLevel, setThinkingLevel] = useState<"LOW" | "HIGH">("LOW");
 
   // Debug mode for multi-permutation search
@@ -115,7 +115,7 @@ export default function SearchPage() {
     }
   };
 
-  const handleModelChange = async (value: "gemini-3-pro-preview" | "gemini-3-flash-preview") => {
+  const handleModelChange = async (value: "gemini-2.5-pro" | "gemini-2.5-flash") => {
     setModel(value);
     // Re-search if we have an active query
     if (lastSearchQuery) {
@@ -169,8 +169,8 @@ export default function SearchPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="gemini-3-pro-preview">Gemini 3 Pro</SelectItem>
-                    <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash</SelectItem>
+                    <SelectItem value="gemini-2.5-pro">Gemini 2.5 Pro</SelectItem>
+                    <SelectItem value="gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

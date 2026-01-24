@@ -42,7 +42,7 @@ This reference implements an **agentic retrieval pipeline** for natural language
 PDF / Audio / Video (< 2-4MB inline, or Cloud Storage link)
          │
          ▼
-  Gemini Multimodal Analysis (gemini-3-flash-preview)
+  Gemini Multimodal Analysis (gemini-2.5-flash)
   ├── "Sees" entire document: text, images, tables, diagrams
   └── Extracts structured metadata:
          │
@@ -70,7 +70,7 @@ PDF / Audio / Video (< 2-4MB inline, or Cloud Storage link)
 User Query + Conversation History
          │
          ▼
-  AI Classifier (gemini-3-pro-preview)
+  AI Classifier (gemini-2.5-pro)
   └── Routes to relevant collection(s)
          │
          ▼
@@ -230,7 +230,7 @@ This reference uses a semiconductor documentation example:
 | Technology | Purpose |
 |------------|---------|
 | Firebase Firestore | Document database with vector search |
-| Gemini 3 Pro/Flash | Query classification and document analysis (`gemini-3-pro-preview`, `gemini-3-flash-preview`) |
+| Gemini 3 Pro/Flash | Query classification and document analysis (`gemini-2.5-pro`, `gemini-2.5-flash`) |
 | Gemini Embeddings | Semantic embeddings (`gemini-embedding-001`, 2048 dims) |
 | Firebase Cloud Functions | Serverless compute (Python) |
 | Next.js / React | Admin site and web client |

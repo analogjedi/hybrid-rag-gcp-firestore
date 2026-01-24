@@ -60,7 +60,12 @@ export async function callFunction<T = unknown>(
 export async function processDocument(
   collectionId: string,
   documentId: string
-): Promise<{ success: boolean; metadata?: unknown; error?: string }> {
+): Promise<{
+  success: boolean;
+  metadata?: Record<string, unknown>;
+  elementsCreated?: number;
+  error?: string;
+}> {
   return callFunction("process_document", { collectionId, documentId });
 }
 
@@ -119,7 +124,7 @@ export async function classifyAndSearch(
   query: string,
   limit: number = 10,
   threshold: number = 0.25,
-  model: string = "gemini-3-pro-preview",
+  model: string = "gemini-2.5-pro",
   thinkingLevel: string = "LOW",
   debugMode: boolean = false,
   enableRerank: boolean = true
@@ -129,11 +134,42 @@ export async function classifyAndSearch(
     collectionId: string;
     rawSimilarity: number | null;
     weightedScore: number;
-    matchType: "exact" | "semantic";
+    matchType: "exact" | "semantic" | "element";
     summary: string;
     keywords: string[];
     fileName: string;
     storagePath: string;
+    // Document structure for granular citations
+    chapters?: Array<{
+      title: string;
+      summary: string;
+      pageStart?: number | null;
+      pageEnd?: number | null;
+      level: number;
+      order: number;
+    }>;
+    figures?: Array<{
+      id: string;
+      type: "figure";
+      title: string | null;
+      description: string;
+      pageNumber: number | null;
+      order: number;
+      figureType: "chart" | "diagram" | "graph" | "schematic" | "other";
+      visualElements: string[];
+      dataInsights: string;
+    }>;
+    tables?: Array<{
+      id: string;
+      type: "table";
+      title: string | null;
+      description: string;
+      pageNumber: number | null;
+      order: number;
+      columnHeaders: string[];
+      rowCount: number | null;
+      dataPreview: string;
+    }>;
     scoreBreakdown?: {
       exactMatches: Array<{ term: string; matched: boolean }>;
       semanticScores: Array<{ term: string; similarity: number | null; score: number }>;
@@ -142,6 +178,12 @@ export async function classifyAndSearch(
     rerankPosition?: number;
     originalPosition?: number;
     rerankExplanation?: string | null;
+    // Element-specific fields (present when matchType is "element")
+    elementId?: string;
+    elementType?: "table" | "figure" | "image";
+    elementTitle?: string | null;
+    elementPageNumber?: number | null;
+    parentDocumentId?: string;
   }>;
   classification: {
     primary_collection: string;
@@ -192,6 +234,23 @@ export async function createVectorIndex(
   operationName: string | null;
 }> {
   return callFunction("create_vector_index", { collectionId });
+}
+
+/**
+ * Generate embeddings for elements in a document's subcollection.
+ */
+export async function generateElementEmbeddingsForDocument(
+  collectionId: string,
+  documentId: string
+): Promise<{
+  processed: number;
+  errors: number;
+  details: Array<{ elementId: string; success: boolean; error?: string }>;
+}> {
+  return callFunction("generate_element_embeddings_for_document", {
+    collectionId,
+    documentId,
+  });
 }
 
 /**

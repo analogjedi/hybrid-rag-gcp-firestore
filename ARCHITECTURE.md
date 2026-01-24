@@ -125,6 +125,57 @@ Element results are merged with document results and sorted by `weightedScore`.
 
 ---
 
+## Grounded Answer Generation
+
+The Chat feature generates grounded answers using Gemini multimodal with the actual PDF documents.
+
+### Flow
+
+```
+User Query → classify_and_search (find relevant docs with chapters/figures metadata)
+          → generate_grounded_answer (load actual PDFs + metadata structure)
+          → Gemini reads full PDF + uses metadata as "table of contents"
+          → Returns answer with granular citations
+```
+
+### Granular Citations
+
+The grounding prompt includes document structure (chapters, figures, tables) to enable section-level citations:
+
+```
+[Doc 1]: Employee_Handbook.pdf
+  Table of Contents:
+    - "Part 1: Welcome" (pp. 6-7)
+    - "Part 2: Settling In" (pp. 9-20)
+    - "Part 3: How Am I Doing?" (pp. 22-25)
+  Figures (16 total):
+    - Fig. 1-1 (illustration, p. 6)
+    - Fig. 2-1 (illustration, p. 12)
+    ...
+```
+
+Gemini then cites specific sections in its answer:
+
+> "Valve employees start new projects by identifying opportunities [Doc 1, "Part 2: Settling In", pp. 9-10]. Figure 3-1 illustrates the method to working without a boss [Doc 1, Fig. 3-1, p. 23]."
+
+### Citation Formats
+
+| Citation Type | Format | Example |
+|---------------|--------|---------|
+| Chapter/Section | `[Doc N, "Title", pp. X-Y]` | `[Doc 1, "Part 2: Settling In", pp. 9-20]` |
+| Figure | `[Doc N, Fig. X-Y, p. Z]` | `[Doc 1, Fig. 3-1, p. 23]` |
+| Table | `[Doc N, Table X, p. Y]` | `[Doc 1, Table 2, p. 15]` |
+| General | `[Doc N]` | `[Doc 1]` |
+
+### Key Points
+
+- **Full PDF is sent to Gemini**: The actual PDF file is loaded from Cloud Storage and sent as multimodal content
+- **Metadata provides structure**: Chapter/figure metadata from Firestore gives Gemini a "map" of the document
+- **Model does the reading**: Gemini reads the full PDF content to generate accurate answers
+- **Rich citations**: Answers reference specific sections, figures, and page numbers
+
+---
+
 ## Embedding Generation Patterns
 
 ### Pattern 1: Trigger-Based (Recommended)

@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
       query,
       limit = 10,
       threshold = 0.25,
-      model = "gemini-3-pro-preview",
+      model = "gemini-2.5-pro",
       thinkingLevel = "LOW",
       debugMode = false,
       enableRerank = true,

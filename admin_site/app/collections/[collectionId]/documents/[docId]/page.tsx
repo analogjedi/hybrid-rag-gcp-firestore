@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { getDocument } from "@/lib/firebase/documents";
 import { getCollection } from "@/lib/firebase/collections";
 import { getDownloadUrl } from "@/lib/firebase/storage";
-import { ExternalLink, FileText, Download, Clock, CheckCircle, AlertCircle } from "lucide-react";
+import { ExternalLink, FileText, Download, Clock, CheckCircle, AlertCircle, BarChart3, Image, Table2 } from "lucide-react";
+import { ProcessingPipeline } from "@/components/documents/ProcessingPipeline";
 
 export const dynamic = "force-dynamic";
 
@@ -87,6 +88,15 @@ export default async function DocumentDetailPage({ params }: PageProps) {
             { label: "Documents", href: `/collections/${collectionId}/documents` },
             { label: document.fileName },
           ]}
+        />
+
+        {/* Processing Pipeline */}
+        <ProcessingPipeline
+          collectionId={collectionId}
+          documentId={docId}
+          initialStatus={document.status}
+          hasEmbedding={!!document.contentEmbedding}
+          elementCounts={document.content?.elementCounts}
         />
 
         <div className="grid gap-6 lg:grid-cols-3">
@@ -172,6 +182,192 @@ export default async function DocumentDetailPage({ params }: PageProps) {
               </Card>
             )}
 
+            {/* Extracted Figures */}
+            {(document.content?.figures?.length ?? 0) > 0 && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5 text-blue-500" />
+                    <div>
+                      <CardTitle>Figures ({document.content?.figures?.length})</CardTitle>
+                      <CardDescription>
+                        Charts, diagrams, and visual elements extracted from the document
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {[...(document.content?.figures ?? [])]
+                      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                      .map((figure, idx) => (
+                        <div
+                          key={idx}
+                          className="border rounded-lg p-4 bg-muted/30"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <h4 className="font-medium text-sm">
+                                  {figure.title || figure.id}
+                                </h4>
+                                <Badge variant="outline" className="text-xs">
+                                  {figure.figureType}
+                                </Badge>
+                                {figure.pageNumber && (
+                                  <span className="text-xs text-muted-foreground">
+                                    p. {figure.pageNumber}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm text-muted-foreground">
+                                {figure.description}
+                              </p>
+                              {figure.dataInsights && (
+                                <p className="text-sm text-blue-600 dark:text-blue-400 mt-2">
+                                  <span className="font-medium">Insight:</span> {figure.dataInsights}
+                                </p>
+                              )}
+                              {figure.visualElements?.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                  {figure.visualElements.map((elem, i) => (
+                                    <Badge key={i} variant="secondary" className="text-xs">
+                                      {elem}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Extracted Tables */}
+            {(document.content?.tables?.length ?? 0) > 0 && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Table2 className="h-5 w-5 text-green-500" />
+                    <div>
+                      <CardTitle>Tables ({document.content?.tables?.length})</CardTitle>
+                      <CardDescription>
+                        Data tables extracted from the document
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {[...(document.content?.tables ?? [])]
+                      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                      .map((table, idx) => (
+                        <div
+                          key={idx}
+                          className="border rounded-lg p-4 bg-muted/30"
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <h4 className="font-medium text-sm">
+                              {table.title || table.id}
+                            </h4>
+                            {table.rowCount && (
+                              <Badge variant="outline" className="text-xs">
+                                {table.rowCount} rows
+                              </Badge>
+                            )}
+                            {table.pageNumber && (
+                              <span className="text-xs text-muted-foreground">
+                                p. {table.pageNumber}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {table.description}
+                          </p>
+                          {table.columnHeaders?.length > 0 && (
+                            <div className="mt-2">
+                              <span className="text-xs font-medium">Columns: </span>
+                              <span className="text-xs text-muted-foreground">
+                                {table.columnHeaders.join(", ")}
+                              </span>
+                            </div>
+                          )}
+                          {table.dataPreview && (
+                            <div className="mt-2 p-2 bg-muted rounded text-xs font-mono overflow-x-auto">
+                              {table.dataPreview}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Extracted Images */}
+            {(document.content?.images?.length ?? 0) > 0 && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Image className="h-5 w-5 text-purple-500" />
+                    <div>
+                      <CardTitle>Images ({document.content?.images?.length})</CardTitle>
+                      <CardDescription>
+                        Photos and illustrations extracted from the document
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {[...(document.content?.images ?? [])]
+                      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                      .map((image, idx) => (
+                        <div
+                          key={idx}
+                          className="border rounded-lg p-4 bg-muted/30"
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <h4 className="font-medium text-sm">
+                              {image.title || image.id}
+                            </h4>
+                            <Badge variant="outline" className="text-xs">
+                              {image.imageType}
+                            </Badge>
+                            {image.pageNumber && (
+                              <span className="text-xs text-muted-foreground">
+                                p. {image.pageNumber}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {image.description}
+                          </p>
+                          {image.subjects?.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              <span className="text-xs font-medium">Subjects: </span>
+                              {image.subjects.map((subject, i) => (
+                                <Badge key={i} variant="secondary" className="text-xs">
+                                  {subject}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                          {image.context && (
+                            <p className="text-sm text-purple-600 dark:text-purple-400 mt-2">
+                              <span className="font-medium">Context:</span> {image.context}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Extracted Metadata */}
             {document.content && Object.keys(document.content).length > 2 && (
               <Card>
@@ -186,7 +382,7 @@ export default async function DocumentDetailPage({ params }: PageProps) {
                     {Object.entries(document.content)
                       .filter(
                         ([key]) =>
-                          !["summary", "keywords", "contentUpdatedAt", "chapters"].includes(key)
+                          !["summary", "keywords", "contentUpdatedAt", "chapters", "figures", "tables", "images", "elementCounts"].includes(key)
                       )
                       .map(([key, value]) => (
                         <div key={key} className="space-y-1">
